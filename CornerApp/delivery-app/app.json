@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Corner Delivery",
+    "slug": "corner-delivery",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "backgroundColor": "#ea580c",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cornerapp.delivery",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Corner Delivery necesita acceso a tu ubicación para asignar pedidos cercanos.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Corner Delivery necesita tu ubicación para que los clientes puedan rastrear sus pedidos."
+      }
+    },
+    "android": {
+      "package": "com.cornerapp.delivery",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Corner Delivery necesita tu ubicación para que los clientes puedan rastrear sus pedidos."
+        }
+      ],
+      "expo-font"
+    ],
+    "web": {},
+    "updates": {
+      "enabled": false
+    }
+  }
+}

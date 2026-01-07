@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "CornerApp",
+    "slug": "cornerapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "backgroundColor": "#ea580c",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cornerapp.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "CornerApp necesita tu ubicación para mostrarte el seguimiento en tiempo real de tu pedido.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "CornerApp necesita tu ubicación para mostrarte el seguimiento en tiempo real de tu pedido."
+      }
+    },
+    "android": {
+      "package": "com.cornerapp.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "CornerApp necesita tu ubicación para mostrarte el seguimiento en tiempo real de tu pedido."
+        }
+      ],
+      "expo-font"
+    ],
+    "web": {}
+  }
+}

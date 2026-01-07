@@ -1,0 +1,99 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "CONFIGURAR_CON_VARIABLE_ENTORNO"
+  },
+  "JWT": {
+    "Issuer": "CornerApp",
+    "Audience": "CornerApp"
+  },
+  "Cors": {
+    "AllowedOrigins": [
+      "https://cornerapp.com",
+      "https://www.cornerapp.com",
+      "https://admin.cornerapp.com"
+    ],
+    "AllowCredentials": true,
+    "MaxAge": 3600,
+    "ExposedHeaders": [
+      "X-Request-Id",
+      "ETag",
+      "Content-Length",
+      "Content-Type"
+    ]
+  },
+  "EnableSwagger": false,
+  "IpRateLimiting": {
+    "EnableEndpointRateLimiting": true,
+    "StackBlockedRequests": false,
+    "RealIpHeader": "X-Real-IP",
+    "ClientIdHeader": "X-ClientId",
+    "HttpStatusCode": 429,
+    "IpWhitelist": [],
+    "EndpointWhitelist": [
+      "get:/health",
+      "get:/health/live",
+      "get:/health/ready"
+    ],
+    "ClientWhitelist": [],
+    "GeneralRules": [
+      {
+        "Endpoint": "*",
+        "Period": "1m",
+        "Limit": 100
+      },
+      {
+        "Endpoint": "POST:/api/orders",
+        "Period": "1m",
+        "Limit": 20
+      },
+      {
+        "Endpoint": "POST:/api/auth/*",
+        "Period": "1m",
+        "Limit": 10
+      },
+      {
+        "Endpoint": "POST:/admin/api/*",
+        "Period": "1m",
+        "Limit": 30
+      }
+    ]
+  },
+  "SecurityHeaders": {
+    "EnableXContentTypeOptions": true,
+    "EnableXFrameOptions": true,
+    "XFrameOptionsValue": "DENY",
+    "EnableXXssProtection": true,
+    "EnableReferrerPolicy": true,
+    "ReferrerPolicyValue": "strict-origin-when-cross-origin",
+    "EnablePermissionsPolicy": true,
+    "PermissionsPolicyValue": "geolocation=(), microphone=(), camera=()",
+    "EnableStrictTransportSecurity": true,
+    "HstsMaxAgeSeconds": 31536000,
+    "HstsIncludeSubDomains": true,
+    "HstsPreload": false,
+    "EnableContentSecurityPolicy": true,
+    "ContentSecurityPolicyValue": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.cornerapp.com;",
+    "EnableXPermittedCrossDomainPolicies": true,
+    "XPermittedCrossDomainPoliciesValue": "none"
+  },
+  "RequestValidation": {
+    "EnableValidation": true,
+    "RequiredHeaders": [],
+    "RequireUserAgent": false,
+    "MaxContentLengthBytes": 10485760,
+    "AllowedMethods": null,
+    "ExcludedPaths": [
+      "/swagger",
+      "/health",
+      "/metrics"
+    ]
+  }
+}
+

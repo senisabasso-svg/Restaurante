@@ -1,0 +1,23 @@
+﻿  Determining projects to restore...
+  Todos los proyectos est├ín actualizados para la restauraci├│n.
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(603,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(623,88): error CS0103: El nombre 'name' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(628,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(647,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(667,104): error CS0103: El nombre 'name' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(672,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Program.cs(234,27): warning ASP0000: Calling 'BuildServiceProvider' from application code results in an additional copy of singleton services being created. Consider alternatives such as dependency injecting services as parameters to 'Configure'. (https://aka.ms/AA5k895) [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+
+ERROR al compilar.
+
+D:\CornerApp\backend-csharp\CornerApp.API\Program.cs(234,27): warning ASP0000: Calling 'BuildServiceProvider' from application code results in an additional copy of singleton services being created. Consider alternatives such as dependency injecting services as parameters to 'Configure'. (https://aka.ms/AA5k895) [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(603,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(623,88): error CS0103: El nombre 'name' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(628,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(647,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(667,104): error CS0103: El nombre 'name' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminSettingsController.cs(672,78): error CS0103: El nombre 'id' no existe en el contexto actual [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+    1 Advertencia(s)
+    6 Errores
+
+Tiempo transcurrido 00:00:02.91

@@ -1,0 +1,9 @@
+﻿  Determining projects to restore...
+  Todos los proyectos est├ín actualizados para la restauraci├│n.
+  CornerApp.API -> D:\CornerApp\backend-csharp\CornerApp.API\bin\Debug\net8.0\CornerApp.API.dll
+
+Compilaci├│n correcta.
+    0 Advertencia(s)
+    0 Errores
+
+Tiempo transcurrido 00:00:01.26

@@ -1,0 +1,94 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: './backend-csharp/CornerApp.API'
+  TEST_PATH: './backend-csharp/CornerApp.API.Tests'
+
+jobs:
+  lint-and-format:
+    name: Code Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Install dotnet format
+      run: dotnet tool install -g dotnet-format
+
+    - name: Check code formatting
+      run: dotnet format ${{ env.PROJECT_PATH }} --verify-no-changes --verbosity diagnostic
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: TestPassword123!
+          MSSQL_PID: Developer
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P TestPassword123! -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.TEST_PATH }}
+
+    - name: Build tests
+      run: dotnet build ${{ env.TEST_PATH }} --no-restore --configuration Release
+
+    - name: Run tests
+      env:
+        ConnectionStrings__DefaultConnection: 'Server=localhost,1433;Database=CornerAppDb;User Id=sa;Password=TestPassword123!;TrustServerCertificate=true'
+        ConnectionStrings__Redis: 'localhost:6379'
+        ASPNETCORE_ENVIRONMENT: 'Testing'
+      run: dotnet test ${{ env.TEST_PATH }} --no-build --configuration Release --verbosity normal
+
+    - name: Comment PR with test results
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const output = `## Test Results
+          
+          Tests completed with status: ${{ job.status }}
+          
+          See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })

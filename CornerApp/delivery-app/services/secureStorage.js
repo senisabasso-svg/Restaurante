@@ -1,0 +1,193 @@
+/**
+ * Servicio de almacenamiento seguro para tokens y datos sensibles
+ * Usa expo-secure-store para almacenamiento encriptado
+ */
+import * as SecureStore from 'expo-secure-store';
+
+const AUTH_TOKEN_KEY = 'authToken';
+const REFRESH_TOKEN_KEY = 'refreshToken';
+const USER_KEY = 'user';
+const USER_ROLE_KEY = 'userRole';
+
+/**
+ * Servicio para almacenamiento seguro de datos sensibles
+ */
+export const secureStorage = {
+  /**
+   * Guardar token de acceso
+   */
+  async setToken(token) {
+    try {
+      if (!token) {
+        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        return;
+      }
+      await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+    } catch (error) {
+      console.error('Error guardando token:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener token de acceso
+   */
+  async getToken() {
+    try {
+      return await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    } catch (error) {
+      console.error('Error obteniendo token:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Eliminar token de acceso
+   */
+  async removeToken() {
+    try {
+      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    } catch (error) {
+      console.error('Error eliminando token:', error);
+    }
+  },
+
+  /**
+   * Guardar refresh token
+   */
+  async setRefreshToken(refreshToken) {
+    try {
+      if (!refreshToken) {
+        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+        return;
+      }
+      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    } catch (error) {
+      console.error('Error guardando refresh token:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener refresh token
+   */
+  async getRefreshToken() {
+    try {
+      return await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    } catch (error) {
+      console.error('Error obteniendo refresh token:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Eliminar refresh token
+   */
+  async removeRefreshToken() {
+    try {
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+    } catch (error) {
+      console.error('Error eliminando refresh token:', error);
+    }
+  },
+
+  /**
+   * Guardar datos del usuario
+   */
+  async setUser(user) {
+    try {
+      if (!user) {
+        await SecureStore.deleteItemAsync(USER_KEY);
+        return;
+      }
+      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+    } catch (error) {
+      console.error('Error guardando usuario:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener datos del usuario
+   */
+  async getUser() {
+    try {
+      const userStr = await SecureStore.getItemAsync(USER_KEY);
+      return userStr ? JSON.parse(userStr) : null;
+    } catch (error) {
+      console.error('Error obteniendo usuario:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Eliminar datos del usuario
+   */
+  async removeUser() {
+    try {
+      await SecureStore.deleteItemAsync(USER_KEY);
+    } catch (error) {
+      console.error('Error eliminando usuario:', error);
+    }
+  },
+
+  /**
+   * Guardar rol del usuario
+   */
+  async setRole(role) {
+    try {
+      if (!role) {
+        await SecureStore.deleteItemAsync(USER_ROLE_KEY);
+        return;
+      }
+      await SecureStore.setItemAsync(USER_ROLE_KEY, role);
+    } catch (error) {
+      console.error('Error guardando rol:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener rol del usuario
+   */
+  async getRole() {
+    try {
+      return await SecureStore.getItemAsync(USER_ROLE_KEY);
+    } catch (error) {
+      console.error('Error obteniendo rol:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Eliminar rol del usuario
+   */
+  async removeRole() {
+    try {
+      await SecureStore.deleteItemAsync(USER_ROLE_KEY);
+    } catch (error) {
+      console.error('Error eliminando rol:', error);
+    }
+  },
+
+  /**
+   * Limpiar todos los datos de autenticación
+   */
+  async clearAll() {
+    await Promise.all([
+      this.removeToken(),
+      this.removeRefreshToken(),
+      this.removeUser(),
+      this.removeRole()
+    ]);
+  },
+
+  /**
+   * Verificar si hay una sesión activa
+   */
+  async hasSession() {
+    const token = await this.getToken();
+    return token !== null;
+  }
+};
+

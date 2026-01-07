@@ -1,0 +1,13 @@
+﻿  Determining projects to restore...
+  Todos los proyectos est├ín actualizados para la restauraci├│n.
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminDeliveryPersonsController.cs(86,69): error CS0246: El nombre del tipo o del espacio de nombres 'CreateDeliveryPersonRequest' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminDeliveryPersonsController.cs(155,77): error CS0246: El nombre del tipo o del espacio de nombres 'UpdateDeliveryPersonRequest' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+
+ERROR al compilar.
+
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminDeliveryPersonsController.cs(86,69): error CS0246: El nombre del tipo o del espacio de nombres 'CreateDeliveryPersonRequest' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminDeliveryPersonsController.cs(155,77): error CS0246: El nombre del tipo o del espacio de nombres 'UpdateDeliveryPersonRequest' no se encontr├│ (┬┐falta una directiva using o una referencia de ensamblado?) [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+    0 Advertencia(s)
+    2 Errores
+
+Tiempo transcurrido 00:00:02.99

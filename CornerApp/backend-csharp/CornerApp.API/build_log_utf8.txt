@@ -1,0 +1,47 @@
+﻿  Determining projects to restore...
+  Todos los proyectos est├ín actualizados para la restauraci├│n.
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,26): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,35): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,35): error CS1010: Nueva l├¡nea en constante [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,37): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(782,35): error CS1001: Se esperaba un identificador [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(782,35): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(783,22): error CS1001: Se esperaba un identificador [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(783,22): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(784,27): error CS1001: Se esperaba un identificador [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(784,27): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,13): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,13): error CS1525: El t├®rmino de expresi├│n '<' no es v├ílido [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,20): error CS1525: El t├®rmino de expresi├│n '?' no es v├ílido [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1003: Error de sintaxis, se esperaba ':' [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1525: El t├®rmino de expresi├│n ')' no es v├ílido [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1513: Se esperaba } [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(3534,5): error CS0106: El modificador 'private' no es v├ílido para este elemento [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(3567,2): error CS1513: Se esperaba } [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+
+ERROR al compilar.
+
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,26): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,35): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,35): error CS1010: Nueva l├¡nea en constante [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(781,37): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(782,35): error CS1001: Se esperaba un identificador [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(782,35): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(783,22): error CS1001: Se esperaba un identificador [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(783,22): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(784,27): error CS1001: Se esperaba un identificador [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(784,27): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,13): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,13): error CS1525: El t├®rmino de expresi├│n '<' no es v├ílido [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,20): error CS1525: El t├®rmino de expresi├│n '?' no es v├ílido [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1003: Error de sintaxis, se esperaba ':' [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1525: El t├®rmino de expresi├│n ')' no es v├ílido [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1002: Se esperaba ; [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(786,46): error CS1513: Se esperaba } [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(3534,5): error CS0106: El modificador 'private' no es v├ílido para este elemento [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+D:\CornerApp\backend-csharp\CornerApp.API\Controllers\AdminOrdersController.cs(3567,2): error CS1513: Se esperaba } [D:\CornerApp\backend-csharp\CornerApp.API\CornerApp.API.csproj]
+    0 Advertencia(s)
+    19 Errores
+
+Tiempo transcurrido 00:00:01.81

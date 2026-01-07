@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # API Backend (Producción)
+  api:
+    build:
+      context: .
+      dockerfile: CornerApp.API/Dockerfile
+    container_name: cornerapp-api-prod
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ISSUER=${JWT_ISSUER:-CornerApp}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-CornerApp}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs:ro
+      - ./CornerApp.API/wwwroot:/app/wwwroot:ro
+    networks:
+      - cornerapp-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  cornerapp-network:
+    driver: bridge
