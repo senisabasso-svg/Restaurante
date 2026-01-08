@@ -39,7 +39,6 @@ const navItems: NavItem[] = [
   { path: '/admin/kitchen', label: 'Cocina', icon: ChefHat },
   { path: '/admin/delivery-persons', label: 'Repartidores', icon: Truck },
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/admin/tables', label: 'Mesas', icon: TableIcon },
   { path: '/admin/orders', label: 'Historial', icon: History },
   { path: '/admin/reports', label: 'Reportes', icon: BarChart3 },
   {
@@ -47,6 +46,7 @@ const navItems: NavItem[] = [
     label: 'Config',
     icon: Settings,
     subItems: [
+      { path: '/admin/tables', label: 'Mesas', icon: TableIcon },
       { path: '/admin/settings/business', label: 'Datos del Negocio', icon: Store },
       { path: '/admin/settings/delivery-zones', label: 'Zonas de Entrega', icon: MapPin },
       { path: '/admin/products', label: 'Productos', icon: Package },
