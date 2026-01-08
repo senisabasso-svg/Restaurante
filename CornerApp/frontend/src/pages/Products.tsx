@@ -103,15 +103,23 @@ export default function ProductsPage() {
       setFormLoading(true);
       if (editingProduct) {
         await api.updateProduct(editingProduct.id, { ...formData, id: editingProduct.id });
-        showToast('Producto actualizado correctamente');
+        showToast('Producto actualizado correctamente', 'success');
       } else {
-        await api.createProduct(formData);
-        showToast('Producto creado correctamente');
+        const newProduct = await api.createProduct(formData);
+        showToast('Producto creado correctamente', 'success');
+        // Resetear filtros para mostrar el nuevo producto
+        setSearchTerm('');
+        setCategoryFilter('');
+        setCurrentPage(1);
       }
       setIsFormModalOpen(false);
-      loadData();
-    } catch (error) {
-      showToast(editingProduct ? 'Error al actualizar producto' : 'Error al crear producto', 'error');
+      // Recargar datos después de un pequeño delay para asegurar que el backend haya guardado
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await loadData();
+    } catch (error: any) {
+      const errorMessage = error?.message || (editingProduct ? 'Error al actualizar producto' : 'Error al crear producto');
+      showToast(errorMessage, 'error');
+      console.error('Error al guardar producto:', error);
     } finally {
       setFormLoading(false);
     }

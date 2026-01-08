@@ -150,15 +150,48 @@ public class RequestLoggingMiddleware
         string responseBody = "[not logged]";
         if (_logResponseBody && response.Body.CanSeek)
         {
-            response.Body.Seek(0, SeekOrigin.Begin);
-            using var reader = new StreamReader(response.Body, Encoding.UTF8, leaveOpen: true);
-            responseBody = await reader.ReadToEndAsync();
-            response.Body.Seek(0, SeekOrigin.Begin);
+            // Verificar si la respuesta está comprimida
+            var contentEncoding = response.Headers["Content-Encoding"].ToString().ToLowerInvariant();
+            var contentType = response.ContentType?.ToLowerInvariant() ?? "";
+            var isCompressed = !string.IsNullOrEmpty(contentEncoding) && 
+                              (contentEncoding.Contains("gzip") || contentEncoding.Contains("br") || contentEncoding.Contains("deflate"));
+            
+            // Verificar si es contenido binario (imágenes, archivos, etc.)
+            var isBinaryContent = contentType.StartsWith("image/") || 
+                                 contentType.StartsWith("video/") || 
+                                 contentType.StartsWith("audio/") ||
+                                 contentType.Contains("octet-stream") ||
+                                 contentType.Contains("pdf") ||
+                                 contentType.Contains("zip");
 
-            // Limitar tamaño del body en logs
-            if (responseBody.Length > _maxResponseBodyLength)
+            if (isCompressed)
             {
-                responseBody = responseBody[.._maxResponseBodyLength] + "... [truncated]";
+                responseBody = $"[compressed: {contentEncoding}]";
+            }
+            else if (isBinaryContent)
+            {
+                responseBody = $"[binary content: {contentType}]";
+            }
+            else if (response.Body.Length > 0)
+            {
+                try
+                {
+                    response.Body.Seek(0, SeekOrigin.Begin);
+                    using var reader = new StreamReader(response.Body, Encoding.UTF8, leaveOpen: true, detectEncodingFromByteOrderMarks: true);
+                    responseBody = await reader.ReadToEndAsync();
+                    response.Body.Seek(0, SeekOrigin.Begin);
+
+                    // Limitar tamaño del body en logs
+                    if (responseBody.Length > _maxResponseBodyLength)
+                    {
+                        responseBody = responseBody[.._maxResponseBodyLength] + "... [truncated]";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Si falla al leer como texto, probablemente es binario
+                    responseBody = $"[unable to read as text: {ex.Message}]";
+                }
             }
         }
 

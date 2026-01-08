@@ -143,7 +143,7 @@ let cachedIP = null;
 const getLocalIP = async () => {
   // Ya no forzamos la IP manualmente, dejamos que la detección automática trabaje
   // pero mantendremos una por defecto solo como último recurso extremo.
-  const DEFAULT_IP = '192.168.1.7'; 
+  const DEFAULT_IP = '192.168.1.36'; 
 
   // Si ya tenemos la IP en caché, usarla
   if (cachedIP) {
@@ -176,7 +176,7 @@ const getLocalIP = async () => {
   }
 
   // Si no se pudo detectar, usar IP por defecto
-  const defaultIP = '192.168.1.7';
+  const defaultIP = '192.168.1.36';
   console.log('⚠️ No se pudo detectar la IP automáticamente, usando IP por defecto:', defaultIP);
   console.log('💡 Para actualizar la IP automáticamente, asegúrate de que Expo esté mostrando la IP en la consola');
   return defaultIP;
@@ -210,7 +210,7 @@ const getBaseUrl = async () => {
 };
 
 // Inicializar API_BASE_URL de forma asíncrona
-let API_BASE_URL = 'http://192.168.1.7:5000'; // Valor por defecto
+let API_BASE_URL = 'http://192.168.1.36:5000'; // Valor por defecto
 
 // Crear cliente axios (se actualizará cuando se detecte la IP)
 const apiClient = axios.create({
@@ -261,7 +261,7 @@ apiClient.interceptors.response.use(
         console.warn('🔧 Asegúrate de que:');
         console.warn('   1. El backend esté ejecutándose (dotnet run)');
         console.warn('   2. Tu dispositivo y PC estén en la misma red WiFi');
-        console.warn('   3. El firewall permita conexiones al puerto 5000');
+        console.warn('   3. El firewall permita conexiones al puerto 3000');
         lastWarningTime = now;
       }
       // Fallback a datos simulados si el backend no está disponible

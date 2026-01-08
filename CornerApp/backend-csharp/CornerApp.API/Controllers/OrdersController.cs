@@ -205,6 +205,22 @@ public class OrdersController : ControllerBase
                 return BadRequest(new { error = "El nombre del cliente es requerido" });
             }
 
+            // Validar que todos los productos existan en la base de datos
+            var productIds = request.Items.Select(item => item.Id).Distinct().ToList();
+            var existingProducts = await _context.Products
+                .Where(p => productIds.Contains(p.Id))
+                .Select(p => p.Id)
+                .ToListAsync();
+            
+            var missingProductIds = productIds.Except(existingProducts).ToList();
+            if (missingProductIds.Any())
+            {
+                _logger.LogWarning("Intento de crear pedido con productos inexistentes: {ProductIds}", string.Join(", ", missingProductIds));
+                return BadRequest(new { 
+                    error = $"Los siguientes productos no existen: {string.Join(", ", missingProductIds)}" 
+                });
+            }
+
             // Validar comprobante de transferencia si se proporciona
             if (!string.IsNullOrWhiteSpace(request.ReceiptImage))
             {
@@ -478,20 +494,77 @@ public class OrdersController : ControllerBase
                     }
                     else
                     {
+                        // Generar un email único si está vacío para evitar violación de índice único
+                        var customerEmail = request.CustomerEmail;
+                        if (string.IsNullOrWhiteSpace(customerEmail))
+                        {
+                            // Generar un email único temporal basado en teléfono o GUID
+                            var uniqueId = !string.IsNullOrWhiteSpace(request.CustomerPhone) 
+                                ? $"temp_{request.CustomerPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "")}@temp.local"
+                                : $"temp_{Guid.NewGuid()}@temp.local";
+                            customerEmail = uniqueId;
+                        }
+                        
                         // Crear nuevo cliente si no existe
                         var newCustomer = new Customer
                         {
                             Name = request.CustomerName,
                             Phone = request.CustomerPhone ?? string.Empty,
-                            Email = request.CustomerEmail ?? string.Empty,
+                            Email = customerEmail,
                             DefaultAddress = request.CustomerAddress,
+                            PasswordHash = string.Empty, // Cliente creado automáticamente sin contraseña
+                            Points = 0,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         };
                         
                         _context.Customers.Add(newCustomer);
-                        await _context.SaveChangesAsync();
-                        customerId = newCustomer.Id;
+                        try
+                        {
+                            await _context.SaveChangesAsync();
+                            customerId = newCustomer.Id;
+                        }
+                        catch (DbUpdateException dbEx)
+                        {
+                            var innerException = dbEx.InnerException;
+                            
+                            // Si es un error de duplicado, intentar buscar el cliente existente
+                            if (innerException != null && (
+                                innerException.Message.Contains("UNIQUE") ||
+                                innerException.Message.Contains("duplicate key") ||
+                                innerException.Message.Contains("Cannot insert duplicate")))
+                            {
+                                _logger.LogWarning("Cliente duplicado detectado, buscando cliente existente...");
+                                
+                                // Intentar buscar el cliente que ya existe
+                                Customer? duplicateCustomer = null;
+                                if (!string.IsNullOrWhiteSpace(request.CustomerPhone))
+                                {
+                                    duplicateCustomer = await _context.Customers
+                                        .FirstOrDefaultAsync(c => c.Phone == request.CustomerPhone);
+                                }
+                                
+                                if (duplicateCustomer == null && !string.IsNullOrWhiteSpace(customerEmail))
+                                {
+                                    duplicateCustomer = await _context.Customers
+                                        .FirstOrDefaultAsync(c => c.Email == customerEmail);
+                                }
+                                
+                                if (duplicateCustomer != null)
+                                {
+                                    customerId = duplicateCustomer.Id;
+                                    _logger.LogInformation("Cliente existente encontrado después de error de duplicado: {CustomerId}", customerId);
+                                }
+                                else
+                                {
+                                    throw;
+                                }
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
                         
                         _logger.LogInformation(
                             "Nuevo cliente creado automáticamente: {CustomerId}, Nombre: {Name}, Teléfono: {Phone}",
@@ -580,7 +653,43 @@ public class OrdersController : ControllerBase
 
             // Guardar en base de datos
             _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException dbEx)
+            {
+                // Capturar el inner exception para obtener más detalles
+                var innerException = dbEx.InnerException;
+                var errorDetails = dbEx.Message;
+                
+                if (innerException != null)
+                {
+                    errorDetails = $"{dbEx.Message} | Inner Exception: {innerException.Message}";
+                    if (innerException.InnerException != null)
+                    {
+                        errorDetails += $" | Inner Inner Exception: {innerException.InnerException.Message}";
+                    }
+                }
+                
+                _logger.LogError(dbEx, "Error de base de datos al crear pedido: {ErrorDetails}", errorDetails);
+                
+                // Verificar si es un error de restricción de clave foránea
+                if (innerException != null && (
+                    innerException.Message.Contains("FOREIGN KEY") ||
+                    innerException.Message.Contains("The INSERT statement conflicted") ||
+                    innerException.Message.Contains("Cannot insert") ||
+                    innerException.Message.Contains("violates foreign key constraint")))
+                {
+                    return BadRequest(new { 
+                        error = "Error al crear el pedido: Uno o más productos no son válidos",
+                        details = innerException.Message
+                    });
+                }
+                
+                // Re-lanzar para que se capture en el catch general
+                throw new Exception($"Error de base de datos: {errorDetails}", dbEx);
+            }
 
             // Sumar punto al cliente si tiene un CustomerId asignado (autenticado o creado automáticamente)
             if (customerId.HasValue)
@@ -737,11 +846,30 @@ public class OrdersController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error al crear pedido: {ExceptionType} - {Message}\n{StackTrace}", 
+            // Capturar inner exception para obtener más detalles
+            var errorMessage = ex.Message;
+            var innerException = ex.InnerException;
+            
+            if (innerException != null)
+            {
+                errorMessage = $"{ex.Message} | Inner Exception: {innerException.Message}";
+                if (innerException.InnerException != null)
+                {
+                    errorMessage += $" | Inner Inner Exception: {innerException.InnerException.Message}";
+                }
+            }
+            
+            _logger.LogError(ex, "Error al crear pedido: {ExceptionType} - {Message}\n{StackTrace}\n{InnerException}", 
                 ex.GetType().Name, 
                 ex.Message, 
-                ex.StackTrace);
-            return StatusCode(500, new { error = "Error al crear el pedido", details = ex.Message });
+                ex.StackTrace,
+                innerException?.ToString() ?? "No inner exception");
+            
+            return StatusCode(500, new { 
+                error = "Error al crear el pedido", 
+                details = errorMessage,
+                exceptionType = ex.GetType().Name
+            });
         }
     }
 

@@ -223,7 +223,7 @@ public class AdminOrdersController : ControllerBase
     /// <summary>
     /// Obtiene productos disponibles para crear pedidos
     /// </summary>
-    [HttpGet("products")]
+    [HttpGet("orders/products")]
     public async Task<ActionResult<IEnumerable<object>>> GetProducts()
     {
         var products = await _context.Products
@@ -270,6 +270,22 @@ public class AdminOrdersController : ControllerBase
                 return BadRequest(new { error = "El nombre del cliente es requerido" });
             }
 
+            // Validar que todos los productos existan en la base de datos
+            var productIds = request.Items.Select(item => item.Id).Distinct().ToList();
+            var existingProducts = await _context.Products
+                .Where(p => productIds.Contains(p.Id))
+                .Select(p => p.Id)
+                .ToListAsync();
+            
+            var missingProductIds = productIds.Except(existingProducts).ToList();
+            if (missingProductIds.Any())
+            {
+                _logger.LogWarning("Intento de crear pedido con productos inexistentes: {ProductIds}", string.Join(", ", missingProductIds));
+                return BadRequest(new { 
+                    error = $"Los siguientes productos no existen: {string.Join(", ", missingProductIds)}" 
+                });
+            }
+
             var total = request.Items.Sum(item => 
             {
                 var price = item.Price >= 0 ? item.Price : 0;
@@ -300,19 +316,94 @@ public class AdminOrdersController : ControllerBase
                 }
                 else
                 {
+                    // Generar un email único si está vacío para evitar violación de índice único
+                    var customerEmail = request.CustomerEmail;
+                    if (string.IsNullOrWhiteSpace(customerEmail))
+                    {
+                        // Generar un email único temporal basado en teléfono o GUID
+                        var uniqueId = !string.IsNullOrWhiteSpace(request.CustomerPhone) 
+                            ? $"temp_{request.CustomerPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "")}@temp.local"
+                            : $"temp_{Guid.NewGuid()}@temp.local";
+                        customerEmail = uniqueId;
+                    }
+                    
                     var newCustomer = new Customer
                     {
                         Name = request.CustomerName,
                         Phone = request.CustomerPhone ?? string.Empty,
-                        Email = request.CustomerEmail ?? string.Empty,
+                        Email = customerEmail,
                         DefaultAddress = request.CustomerAddress,
+                        PasswordHash = string.Empty, // Cliente creado automáticamente sin contraseña
+                        Points = 0,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
                     
                     _context.Customers.Add(newCustomer);
-                    await _context.SaveChangesAsync();
-                    customerId = newCustomer.Id;
+                    try
+                    {
+                        await _context.SaveChangesAsync();
+                        customerId = newCustomer.Id;
+                    }
+                    catch (DbUpdateException dbEx)
+                    {
+                        var innerException = dbEx.InnerException;
+                        var errorDetails = dbEx.Message;
+                        
+                        if (innerException != null)
+                        {
+                            errorDetails = $"{dbEx.Message} | Inner Exception: {innerException.Message}";
+                            if (innerException.InnerException != null)
+                            {
+                                errorDetails += $" | Inner Inner Exception: {innerException.InnerException.Message}";
+                            }
+                        }
+                        
+                        _logger.LogError(dbEx, "Error de base de datos al crear cliente: {ErrorDetails}. Datos: Name={Name}, Phone={Phone}, Email={Email}", 
+                            errorDetails, newCustomer.Name, newCustomer.Phone, newCustomer.Email);
+                        
+                        // Verificar si es un error de restricción única (duplicado)
+                        if (innerException != null && (
+                            innerException.Message.Contains("UNIQUE") ||
+                            innerException.Message.Contains("duplicate key") ||
+                            innerException.Message.Contains("Cannot insert duplicate")))
+                        {
+                            _logger.LogWarning("Cliente duplicado detectado, buscando cliente existente...");
+                            
+                            // Intentar buscar el cliente que ya existe
+                            Customer? duplicateCustomer = null;
+                            if (!string.IsNullOrWhiteSpace(request.CustomerPhone))
+                            {
+                                duplicateCustomer = await _context.Customers
+                                    .FirstOrDefaultAsync(c => c.Phone == request.CustomerPhone);
+                            }
+                            
+                            if (duplicateCustomer == null && !string.IsNullOrWhiteSpace(customerEmail))
+                            {
+                                duplicateCustomer = await _context.Customers
+                                    .FirstOrDefaultAsync(c => c.Email == customerEmail);
+                            }
+                            
+                            if (duplicateCustomer != null)
+                            {
+                                customerId = duplicateCustomer.Id;
+                                _logger.LogInformation("Cliente existente encontrado después de error de duplicado: {CustomerId}", customerId);
+                                // Continuar con el flujo normal usando el cliente existente
+                            }
+                            else
+                            {
+                                return BadRequest(new { 
+                                    error = "Ya existe un cliente con este teléfono o email",
+                                    details = innerException.Message
+                                });
+                            }
+                        }
+                        else
+                        {
+                            // Re-lanzar para que se capture en el catch general
+                            throw new Exception($"Error al crear cliente: {errorDetails}", dbEx);
+                        }
+                    }
                 }
             }
 
@@ -331,34 +422,58 @@ public class AdminOrdersController : ControllerBase
 
             // Validar método de pago
             var paymentMethodName = request.PaymentMethod ?? PaymentConstants.METHOD_CASH;
+            var paymentMethodNameLower = paymentMethodName.ToLower();
             var paymentMethod = await _context.PaymentMethods
                 .FirstOrDefaultAsync(pm => pm.Name != null && 
-                    pm.Name.Equals(paymentMethodName, StringComparison.OrdinalIgnoreCase) && pm.IsActive);
+                    pm.Name.ToLower() == paymentMethodNameLower && pm.IsActive);
             
             if (paymentMethod == null)
             {
                 await _adminDashboardService.EnsurePaymentMethodsExistAsync();
+                var cashMethodLower = PaymentConstants.METHOD_CASH.ToLower();
                 paymentMethod = await _context.PaymentMethods
                     .FirstOrDefaultAsync(pm => pm.Name != null && 
-                        pm.Name.Equals(PaymentConstants.METHOD_CASH, StringComparison.OrdinalIgnoreCase) && pm.IsActive);
+                        pm.Name.ToLower() == cashMethodLower && pm.IsActive);
                 
                 if (paymentMethod != null)
                 {
                     paymentMethodName = paymentMethod.Name;
                 }
+                else
+                {
+                    // Si aún no existe, usar el valor por defecto
+                    paymentMethodName = PaymentConstants.METHOD_CASH;
+                }
             }
             else
             {
-                paymentMethodName = paymentMethod.Name;
+                paymentMethodName = paymentMethod.Name ?? PaymentConstants.METHOD_CASH;
+            }
+            
+            // Asegurar que paymentMethodName nunca sea null o vacío
+            if (string.IsNullOrWhiteSpace(paymentMethodName))
+            {
+                paymentMethodName = PaymentConstants.METHOD_CASH;
             }
 
             var estimatedMinutes = _adminDashboardService.CalculateEstimatedDeliveryTime(
                 customerLatitude, customerLongitude, null, null);
 
+            // Crear los items primero
+            var orderItems = request.Items.Select(item => new OrderItem
+            {
+                ProductId = item.Id,
+                ProductName = (item.Name ?? "Producto sin nombre").Length > 200 
+                    ? (item.Name ?? "Producto sin nombre").Substring(0, 200) 
+                    : (item.Name ?? "Producto sin nombre"),
+                UnitPrice = item.Price >= 0 ? item.Price : 0,
+                Quantity = item.Quantity > 0 ? item.Quantity : 1
+            }).ToList();
+
             var order = new Order
             {
                 CustomerId = customerId,
-                CustomerName = request.CustomerName,
+                CustomerName = request.CustomerName ?? string.Empty,
                 CustomerPhone = request.CustomerPhone ?? string.Empty,
                 CustomerAddress = request.CustomerAddress ?? string.Empty,
                 CustomerEmail = request.CustomerEmail ?? string.Empty,
@@ -371,17 +486,85 @@ public class AdminOrdersController : ControllerBase
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 Comments = request.Comments,
-                Items = request.Items.Select(item => new OrderItem
-                {
-                    ProductId = item.Id,
-                    ProductName = item.Name ?? "Producto sin nombre",
-                    UnitPrice = item.Price >= 0 ? item.Price : 0,
-                    Quantity = item.Quantity > 0 ? item.Quantity : 1
-                }).ToList()
+                Items = orderItems
             };
 
             _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                var innerException = ex.InnerException;
+                var innerExceptionMessage = innerException?.Message ?? ex.Message;
+                var innerExceptionType = innerException?.GetType().Name ?? ex.GetType().Name;
+                var innerExceptionStackTrace = innerException?.StackTrace ?? ex.StackTrace;
+                
+                // Log detallado
+                _logger.LogError(ex, "Error al guardar el pedido. Inner exception type: {InnerExceptionType}, Message: {InnerExceptionMessage}", 
+                    innerExceptionType, innerExceptionMessage);
+                _logger.LogError("Stack trace: {StackTrace}", innerExceptionStackTrace);
+                _logger.LogError("Datos del pedido: CustomerName={CustomerName}, Total={Total}, PaymentMethod={PaymentMethod}, ItemsCount={ItemsCount}", 
+                    order.CustomerName, order.Total, order.PaymentMethod, order.Items?.Count ?? 0);
+                
+                if (order.Items != null && order.Items.Any())
+                {
+                    foreach (var item in order.Items)
+                    {
+                        _logger.LogError("Item: ProductId={ProductId}, ProductName={ProductName} (Length={Length}), UnitPrice={UnitPrice}, Quantity={Quantity}", 
+                            item.ProductId, item.ProductName, item.ProductName?.Length ?? 0, item.UnitPrice, item.Quantity);
+                    }
+                }
+                
+                // Verificar si es un error de restricción de clave foránea
+                if (innerException != null && (
+                    innerException.Message.Contains("FOREIGN KEY") ||
+                    innerException.Message.Contains("The INSERT statement conflicted") ||
+                    innerException.Message.Contains("Cannot insert") ||
+                    innerException.Message.Contains("violates foreign key constraint")))
+                {
+                    return BadRequest(new { 
+                        error = "Error al crear el pedido: Uno o más productos no son válidos",
+                        details = innerExceptionMessage
+                    });
+                }
+                
+                // Retornar el error con el inner exception en los detalles
+                return StatusCode(500, new { 
+                    error = "Error al crear el pedido", 
+                    details = $"{innerExceptionType}: {innerExceptionMessage}",
+                    fullException = ex.ToString()
+                });
+            }
+            catch (Exception ex)
+            {
+                // Capturar inner exception para obtener más detalles
+                var errorMessage = ex.Message;
+                var innerException = ex.InnerException;
+                
+                if (innerException != null)
+                {
+                    errorMessage = $"{ex.Message} | Inner Exception: {innerException.Message}";
+                    if (innerException.InnerException != null)
+                    {
+                        errorMessage += $" | Inner Inner Exception: {innerException.InnerException.Message}";
+                    }
+                }
+                
+                _logger.LogError(ex, "Error inesperado al crear el pedido: {ExceptionType} - {Message}\n{StackTrace}\n{InnerException}", 
+                    ex.GetType().Name,
+                    ex.Message,
+                    ex.StackTrace,
+                    innerException?.ToString() ?? "No inner exception");
+                
+                return StatusCode(500, new { 
+                    error = "Error al crear el pedido", 
+                    details = errorMessage,
+                    exceptionType = ex.GetType().Name,
+                    fullException = ex.ToString()
+                });
+            }
 
             if (customerId.HasValue)
             {

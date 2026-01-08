@@ -30,7 +30,7 @@ import { useOrdersHub } from '../hooks/useOrdersHub';
 import { useNotificationSound, getTimeElapsed } from '../hooks/useNotificationSound';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
-import type { Order, OrderStatus, DeliveryPerson, PaymentMethod, Product, OrderStatusHistoryItem } from '../types';
+import type { Order, OrderStatus, DeliveryPerson, PaymentMethod, Product, OrderStatusHistoryItem, CreateOrderRequest } from '../types';
 
 const statusConfig: Record<OrderStatus, { label: string; color: string; icon: typeof Clock }> = {
   pending: { label: 'Pendiente', color: 'bg-yellow-500', icon: Clock },
@@ -65,6 +65,19 @@ export default function OrdersPage() {
   const [selectedDeliveryPersonId, setSelectedDeliveryPersonId] = useState<number | null>(null);
   const [orderHistory, setOrderHistory] = useState<OrderStatusHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // Estado para crear pedido
+  const [newOrder, setNewOrder] = useState<CreateOrderRequest>({
+    customerName: '',
+    customerAddress: '',
+    customerPhone: '',
+    paymentMethod: 'cash',
+    comments: '',
+    items: [],
+  });
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [productQuantity, setProductQuantity] = useState(1);
+  const [isCreating, setIsCreating] = useState(false);
   
   const { showToast } = useToast();
   const { playSound } = useNotificationSound();
@@ -1069,6 +1082,273 @@ export default function OrdersPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Create Order Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setNewOrder({
+            customerName: '',
+            customerAddress: '',
+            customerPhone: '',
+            paymentMethod: 'cash',
+            comments: '',
+            items: [],
+          });
+          setSelectedProductId(null);
+          setProductQuantity(1);
+        }}
+        title="Crear Nuevo Pedido"
+      >
+        <div className="space-y-4">
+          {/* Cliente */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Nombre del Cliente *
+            </label>
+            <input
+              type="text"
+              value={newOrder.customerName}
+              onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: Juan Pérez"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Dirección *
+            </label>
+            <input
+              type="text"
+              value={newOrder.customerAddress}
+              onChange={(e) => setNewOrder({ ...newOrder, customerAddress: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: Calle 123, Barrio Centro"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Teléfono
+            </label>
+            <input
+              type="text"
+              value={newOrder.customerPhone}
+              onChange={(e) => setNewOrder({ ...newOrder, customerPhone: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: 099123456"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Método de Pago *
+            </label>
+            <select
+              value={newOrder.paymentMethod}
+              onChange={(e) => setNewOrder({ ...newOrder, paymentMethod: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              {paymentMethods.map((method) => (
+                <option key={method.id} value={method.name}>
+                  {method.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Productos */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Agregar Producto
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={selectedProductId || ''}
+                onChange={(e) => setSelectedProductId(Number(e.target.value) || null)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">Selecciona un producto</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} - ${product.price.toFixed(2)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min="1"
+                value={productQuantity}
+                onChange={(e) => setProductQuantity(Number(e.target.value) || 1)}
+                className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Cant."
+              />
+              <button
+                onClick={() => {
+                  if (selectedProductId) {
+                    const product = products.find(p => p.id === selectedProductId);
+                    if (product) {
+                      setNewOrder({
+                        ...newOrder,
+                        items: [...newOrder.items, { productId: selectedProductId, quantity: productQuantity }],
+                      });
+                      setSelectedProductId(null);
+                      setProductQuantity(1);
+                    }
+                  }
+                }}
+                disabled={!selectedProductId}
+                className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de productos agregados */}
+          {newOrder.items.length > 0 && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Productos Agregados
+              </label>
+              <div className="border border-gray-200 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
+                {newOrder.items.map((item, index) => {
+                  const product = products.find(p => p.id === item.productId);
+                  return product ? (
+                    <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                      <span className="text-sm text-gray-800">
+                        {product.name} x{item.quantity}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">
+                          ${(product.price * item.quantity).toFixed(2)}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setNewOrder({
+                              ...newOrder,
+                              items: newOrder.items.filter((_, i) => i !== index),
+                            });
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+              <div className="text-right font-bold text-lg text-primary-600">
+                Total: ${newOrder.items.reduce((total, item) => {
+                  const product = products.find(p => p.id === item.productId);
+                  return total + (product ? product.price * item.quantity : 0);
+                }, 0).toFixed(2)}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Comentarios
+            </label>
+            <textarea
+              value={newOrder.comments}
+              onChange={(e) => setNewOrder({ ...newOrder, comments: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              rows={3}
+              placeholder="Notas adicionales del pedido..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <button
+              onClick={() => {
+                setIsCreateModalOpen(false);
+                setNewOrder({
+                  customerName: '',
+                  customerAddress: '',
+                  customerPhone: '',
+                  paymentMethod: 'cash',
+                  comments: '',
+                  items: [],
+                });
+                setSelectedProductId(null);
+                setProductQuantity(1);
+              }}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={async () => {
+                if (!newOrder.customerName || !newOrder.customerAddress || newOrder.items.length === 0) {
+                  showToast('Completa todos los campos requeridos y agrega al menos un producto', 'error');
+                  return;
+                }
+                try {
+                  setIsCreating(true);
+                  // Transformar items para que coincidan con el formato del backend
+                  const transformedOrder = {
+                    customerName: newOrder.customerName,
+                    customerAddress: newOrder.customerAddress,
+                    customerPhone: newOrder.customerPhone || undefined,
+                    paymentMethod: newOrder.paymentMethod,
+                    comments: newOrder.comments || undefined,
+                    items: newOrder.items.map(item => {
+                      const product = products.find(p => p.id === item.productId);
+                      if (!product) {
+                        throw new Error(`Producto con ID ${item.productId} no encontrado`);
+                      }
+                      return {
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        quantity: item.quantity
+                      };
+                    })
+                  };
+                  await api.createOrder(transformedOrder);
+                  showToast('Pedido creado exitosamente', 'success');
+                  setIsCreateModalOpen(false);
+                  setNewOrder({
+                    customerName: '',
+                    customerAddress: '',
+                    customerPhone: '',
+                    paymentMethod: 'cash',
+                    comments: '',
+                    items: [],
+                  });
+                  setSelectedProductId(null);
+                  setProductQuantity(1);
+                  loadData();
+                } catch (error: unknown) {
+                  const errorMessage = error instanceof Error ? error.message : 'Error al crear pedido';
+                  showToast(errorMessage, 'error');
+                } finally {
+                  setIsCreating(false);
+                }
+              }}
+              disabled={isCreating || !newOrder.customerName || !newOrder.customerAddress || newOrder.items.length === 0}
+              className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isCreating ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Plus size={18} />
+                  Crear Pedido
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

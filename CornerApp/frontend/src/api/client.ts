@@ -131,7 +131,7 @@ class ApiClient {
 
   // Products
   async getProducts() {
-    return this.request<Product[]>('/api/products');
+    return this.request<Product[]>('/admin/api/products');
   }
 
   async getProduct(id: number) {
@@ -139,7 +139,7 @@ class ApiClient {
   }
 
   async createProduct(data: CreateProductRequest) {
-    return this.request<Product>('/admin/api/products/create', { method: 'POST', body: data });
+    return this.request<Product>('/admin/api/products', { method: 'POST', body: data });
   }
 
   async updateProduct(id: number, data: UpdateProductRequest) {

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using CornerApp.API.Models;
 
 namespace CornerApp.API.Data;
@@ -159,13 +160,19 @@ public class ApplicationDbContext : DbContext
             entity.OwnsMany(e => e.Items, item =>
             {
                 item.WithOwner().HasForeignKey("OrderId");
-                item.Property<int>("Id");
+                var idProperty = item.Property<int>("Id");
+                idProperty.ValueGeneratedOnAdd();
+                if (Database.IsSqlServer())
+                {
+                    idProperty.UseIdentityColumn();
+                }
                 item.HasKey("Id");
                 item.Property(i => i.ProductId).IsRequired();
                 item.Property(i => i.ProductName).IsRequired().HasMaxLength(200);
-                item.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)");
-                item.Property(i => i.Quantity);
+                item.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)").IsRequired();
+                item.Property(i => i.Quantity).IsRequired();
                 item.ToTable("OrderItems");
+                item.HasIndex("OrderId");
             });
             
             // Índices para optimizar consultas frecuentes de Orders

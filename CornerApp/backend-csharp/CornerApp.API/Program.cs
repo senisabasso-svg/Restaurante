@@ -848,6 +848,35 @@ if (app.Environment.IsDevelopment())
                 await dbContext.SaveChangesAsync();
                 Log.Information("✅ Contraseña actualizada para usuario: {Email}", email);
             }
+            
+            // Crear repartidor Diego si no existe
+            var deliveryEmail = "diego@gmail.com";
+            var existingDeliveryPerson = await dbContext.DeliveryPersons
+                .FirstOrDefaultAsync(d => (d.Username != null && d.Username.ToLower() == deliveryEmail.ToLower()) || 
+                                         (d.Email != null && d.Email.ToLower() == deliveryEmail.ToLower()));
+            if (existingDeliveryPerson == null)
+            {
+                var deliveryPerson = new CornerApp.API.Models.DeliveryPerson
+                {
+                    Name = "Diego",
+                    Username = deliveryEmail.ToLower(),
+                    Email = deliveryEmail.ToLower(),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.DeliveryPersons.Add(deliveryPerson);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Repartidor creado: {Email} - Usuario: {Username}, Contraseña: admin123", deliveryEmail, deliveryEmail);
+            }
+            else
+            {
+                // Actualizar contraseña si el repartidor ya existe
+                existingDeliveryPerson.PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123");
+                existingDeliveryPerson.UpdatedAt = DateTime.UtcNow;
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Contraseña actualizada para repartidor: {Email}", deliveryEmail);
+            }
         }
         catch (Exception ex)
         {
