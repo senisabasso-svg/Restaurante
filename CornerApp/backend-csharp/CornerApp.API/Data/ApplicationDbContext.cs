@@ -12,6 +12,7 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<Product> Products { get; set; }
+    public DbSet<SubProduct> SubProducts { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<Customer> Customers { get; set; }
     public DbSet<Category> Categories { get; set; }
@@ -66,6 +67,29 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.IsAvailable);
             entity.HasIndex(e => e.DisplayOrder);
             entity.HasIndex(e => new { e.CategoryId, e.IsAvailable, e.DisplayOrder }); // Índice compuesto para consultas comunes
+        });
+
+        // Configurar SubProduct
+        modelBuilder.Entity<SubProduct>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.IsAvailable).HasDefaultValue(true);
+            entity.Property(e => e.DisplayOrder).HasDefaultValue(0);
+            
+            // Relación con Product
+            entity.HasOne(e => e.Product)
+                  .WithMany(p => p.SubProducts)
+                  .HasForeignKey(e => e.ProductId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            
+            // Índices para optimizar consultas frecuentes
+            entity.HasIndex(e => e.ProductId);
+            entity.HasIndex(e => e.IsAvailable);
+            entity.HasIndex(e => e.DisplayOrder);
+            entity.HasIndex(e => new { e.ProductId, e.IsAvailable, e.DisplayOrder }); // Índice compuesto para consultas comunes
         });
 
         // Configurar Customer

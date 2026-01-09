@@ -909,6 +909,78 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+// Crear tabla SubProducts si no existe (ejecutar siempre, no solo en desarrollo)
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        Log.Information("🔍 Verificando existencia de tabla SubProducts...");
+        
+        if (dbContext.Database.IsSqlServer())
+        {
+            Log.Information("📊 Usando SQL Server, creando tabla SubProducts...");
+            // Crear la tabla si no existe
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SubProducts]') AND type in (N'U'))
+                BEGIN
+                    CREATE TABLE [dbo].[SubProducts] (
+                        [Id] int NOT NULL IDENTITY(1,1),
+                        [Name] nvarchar(200) NOT NULL,
+                        [Description] nvarchar(500) NULL,
+                        [Price] decimal(18,2) NOT NULL,
+                        [IsAvailable] bit NOT NULL DEFAULT 1,
+                        [DisplayOrder] int NOT NULL DEFAULT 0,
+                        [CreatedAt] datetime2 NOT NULL,
+                        [UpdatedAt] datetime2 NULL,
+                        [ProductId] int NOT NULL,
+                        CONSTRAINT [PK_SubProducts] PRIMARY KEY ([Id]),
+                        CONSTRAINT [FK_SubProducts_Products_ProductId] FOREIGN KEY ([ProductId]) 
+                            REFERENCES [dbo].[Products] ([Id]) ON DELETE CASCADE
+                    );
+                    CREATE INDEX [IX_SubProducts_ProductId] ON [dbo].[SubProducts] ([ProductId]);
+                    CREATE INDEX [IX_SubProducts_IsAvailable] ON [dbo].[SubProducts] ([IsAvailable]);
+                    CREATE INDEX [IX_SubProducts_DisplayOrder] ON [dbo].[SubProducts] ([DisplayOrder]);
+                    CREATE INDEX [IX_SubProducts_ProductId_IsAvailable_DisplayOrder] ON [dbo].[SubProducts] ([ProductId], [IsAvailable], [DisplayOrder]);
+                END
+            ");
+            Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en SQL Server");
+        }
+        else if (dbContext.Database.IsSqlite())
+        {
+            Log.Information("📊 Usando SQLite, creando tabla SubProducts...");
+            // Para SQLite
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS [SubProducts] (
+                    [Id] INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    [Name] TEXT NOT NULL,
+                    [Description] TEXT NULL,
+                    [Price] REAL NOT NULL,
+                    [IsAvailable] INTEGER NOT NULL DEFAULT 1,
+                    [DisplayOrder] INTEGER NOT NULL DEFAULT 0,
+                    [CreatedAt] TEXT NOT NULL,
+                    [UpdatedAt] TEXT NULL,
+                    [ProductId] INTEGER NOT NULL,
+                    FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS [IX_SubProducts_ProductId] ON [SubProducts] ([ProductId]);
+                CREATE INDEX IF NOT EXISTS [IX_SubProducts_IsAvailable] ON [SubProducts] ([IsAvailable]);
+                CREATE INDEX IF NOT EXISTS [IX_SubProducts_DisplayOrder] ON [SubProducts] ([DisplayOrder]);
+            ");
+            Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en SQLite");
+        }
+        else
+        {
+            Log.Warning("⚠️ Tipo de base de datos no reconocido, no se puede crear tabla SubProducts automáticamente");
+        }
+    }
+    catch (Exception ex)
+    {
+        // Si la tabla ya existe o hay algún error, loguear el error completo
+        Log.Error(ex, "❌ Error al crear tabla SubProducts: {Message}\n{StackTrace}", ex.Message, ex.StackTrace);
+    }
+}
+
 app.Run();
 }
 catch (Exception ex)

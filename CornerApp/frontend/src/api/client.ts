@@ -190,6 +190,27 @@ class ApiClient {
     return response.json();
   }
 
+  // SubProducts
+  async getSubProductsByProduct(productId: number) {
+    return this.request<SubProduct[]>(`/admin/api/subproducts/product/${productId}`);
+  }
+
+  async getSubProduct(id: number) {
+    return this.request<SubProduct>(`/admin/api/subproducts/${id}`);
+  }
+
+  async createSubProduct(data: CreateSubProductRequest) {
+    return this.request<SubProduct>('/admin/api/subproducts', { method: 'POST', body: data });
+  }
+
+  async updateSubProduct(id: number, data: UpdateSubProductRequest) {
+    return this.request<SubProduct>(`/admin/api/subproducts/${id}`, { method: 'PUT', body: data });
+  }
+
+  async deleteSubProduct(id: number) {
+    return this.request(`/admin/api/subproducts/${id}`, { method: 'DELETE' });
+  }
+
   // Categories
   async getCategories() {
     return this.request<Category[]>('/api/categories');
@@ -450,7 +471,10 @@ import type {
   CreateTableRequest,
   UpdateTableRequest,
   Space,
-  CreateSpaceRequest
+  CreateSpaceRequest,
+  SubProduct,
+  CreateSubProductRequest,
+  UpdateSubProductRequest
 } from '../types';
 
 // Export singleton instance

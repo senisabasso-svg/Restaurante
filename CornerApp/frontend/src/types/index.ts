@@ -59,6 +59,37 @@ export interface Product {
   isAvailable: boolean;
   displayOrder: number;
   createdAt: string;
+  subProducts?: SubProduct[];
+}
+
+export interface SubProduct {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  productId: number;
+  displayOrder: number;
+  isAvailable: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CreateSubProductRequest {
+  name: string;
+  description?: string;
+  price: number;
+  productId: number;
+  displayOrder?: number;
+  isAvailable?: boolean;
+}
+
+export interface UpdateSubProductRequest {
+  name?: string;
+  description?: string;
+  price?: number;
+  productId?: number;
+  displayOrder?: number;
+  isAvailable?: boolean;
 }
 
 export interface CreateProductRequest {

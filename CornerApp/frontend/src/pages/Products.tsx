@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Package, List, X } from 'lucide-react';
 import { api } from '../api/client';
 import { useToast } from '../components/Toast/ToastContext';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
 import Pagination from '../components/Pagination/Pagination';
-import type { Product, Category, CreateProductRequest } from '../types';
+import type { Product, Category, CreateProductRequest, SubProduct, CreateSubProductRequest } from '../types';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -21,6 +21,14 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   
+  // SubProducts modal states
+  const [isSubProductsModalOpen, setIsSubProductsModalOpen] = useState(false);
+  const [productForSubProducts, setProductForSubProducts] = useState<Product | null>(null);
+  const [subProducts, setSubProducts] = useState<SubProduct[]>([]);
+  const [isSubProductFormModalOpen, setIsSubProductFormModalOpen] = useState(false);
+  const [editingSubProduct, setEditingSubProduct] = useState<SubProduct | null>(null);
+  const [deleteSubProduct, setDeleteSubProduct] = useState<SubProduct | null>(null);
+  
   // Form state
   const [formData, setFormData] = useState<CreateProductRequest>({
     name: '',
@@ -32,6 +40,17 @@ export default function ProductsPage() {
     isAvailable: true,
   });
   const [formLoading, setFormLoading] = useState(false);
+  
+  // SubProduct form state
+  const [subProductFormData, setSubProductFormData] = useState<CreateSubProductRequest>({
+    name: '',
+    description: '',
+    price: 0,
+    productId: 0,
+    displayOrder: 0,
+    isAvailable: true,
+  });
+  const [subProductFormLoading, setSubProductFormLoading] = useState(false);
 
   const { showToast } = useToast();
 
@@ -46,7 +65,20 @@ export default function ProductsPage() {
         api.getProducts(),
         api.getCategories(),
       ]);
-      setProducts(productsData);
+      
+      // Cargar subproductos para cada producto
+      const productsWithSubProducts = await Promise.all(
+        productsData.map(async (product) => {
+          try {
+            const subProducts = await api.getSubProductsByProduct(product.id);
+            return { ...product, subProducts };
+          } catch (error) {
+            return { ...product, subProducts: [] };
+          }
+        })
+      );
+      
+      setProducts(productsWithSubProducts);
       setCategories(categoriesData);
     } catch (error) {
       showToast('Error al cargar productos', 'error');
@@ -156,6 +188,99 @@ export default function ProductsPage() {
     }
   };
 
+  // SubProducts management
+  const openSubProductsModal = async (product: Product) => {
+    setProductForSubProducts(product);
+    setIsSubProductsModalOpen(true);
+    await loadSubProducts(product.id);
+  };
+
+  const loadSubProducts = async (productId: number) => {
+    try {
+      const subProductsData = await api.getSubProductsByProduct(productId);
+      setSubProducts(subProductsData);
+    } catch (error) {
+      showToast('Error al cargar subproductos', 'error');
+    }
+  };
+
+  const openCreateSubProductModal = (product: Product) => {
+    setEditingSubProduct(null);
+    setSubProductFormData({
+      name: '',
+      description: '',
+      price: 0,
+      productId: product.id,
+      displayOrder: 0,
+      isAvailable: true,
+    });
+    setIsSubProductFormModalOpen(true);
+  };
+
+  const openEditSubProductModal = (subProduct: SubProduct) => {
+    setEditingSubProduct(subProduct);
+    setSubProductFormData({
+      name: subProduct.name,
+      description: subProduct.description || '',
+      price: subProduct.price,
+      productId: subProduct.productId,
+      displayOrder: subProduct.displayOrder,
+      isAvailable: subProduct.isAvailable,
+    });
+    setIsSubProductFormModalOpen(true);
+  };
+
+  const handleSubProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!subProductFormData.name.trim()) {
+      showToast('El nombre es requerido', 'error');
+      return;
+    }
+    if (subProductFormData.price < 0) {
+      showToast('El precio no puede ser negativo', 'error');
+      return;
+    }
+    if (!subProductFormData.productId) {
+      showToast('Debes asociar el subproducto a un producto', 'error');
+      return;
+    }
+
+    try {
+      setSubProductFormLoading(true);
+      if (editingSubProduct) {
+        await api.updateSubProduct(editingSubProduct.id, subProductFormData);
+        showToast('Subproducto actualizado correctamente', 'success');
+      } else {
+        await api.createSubProduct(subProductFormData);
+        showToast('Subproducto creado correctamente', 'success');
+      }
+      setIsSubProductFormModalOpen(false);
+      if (productForSubProducts) {
+        await loadSubProducts(productForSubProducts.id);
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || (editingSubProduct ? 'Error al actualizar subproducto' : 'Error al crear subproducto');
+      showToast(errorMessage, 'error');
+    } finally {
+      setSubProductFormLoading(false);
+    }
+  };
+
+  const handleDeleteSubProduct = async () => {
+    if (!deleteSubProduct) return;
+    try {
+      await api.deleteSubProduct(deleteSubProduct.id);
+      showToast('Subproducto eliminado correctamente');
+      setDeleteSubProduct(null);
+      if (productForSubProducts) {
+        await loadSubProducts(productForSubProducts.id);
+      }
+    } catch (error) {
+      showToast('Error al eliminar subproducto', 'error');
+    }
+  };
+
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -243,6 +368,7 @@ export default function ProductsPage() {
                 <th className="px-4 py-3 text-left text-sm font-semibold">Nombre</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold">Categoría</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold">Precio</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold">Guarniciones</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold">Estado</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold">Acciones</th>
               </tr>
@@ -250,7 +376,7 @@ export default function ProductsPage() {
             <tbody className="divide-y divide-gray-200">
               {paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                     <Package size={48} className="mx-auto mb-4 text-gray-300" />
                     No hay productos para mostrar
                   </td>
@@ -293,6 +419,16 @@ export default function ProductsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="font-bold text-green-600">${product.price.toFixed(2)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => openSubProductsModal(product)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
+                        title="Gestionar guarniciones"
+                      >
+                        <List size={14} />
+                        {product.subProducts?.length || 0}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
@@ -487,6 +623,192 @@ export default function ProductsPage() {
         onConfirm={handleDelete}
         title="Eliminar Producto"
         message={`¿Estás seguro de eliminar "${deleteProduct?.name}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        type="danger"
+      />
+
+      {/* SubProducts Management Modal */}
+      <Modal
+        isOpen={isSubProductsModalOpen}
+        onClose={() => {
+          setIsSubProductsModalOpen(false);
+          setProductForSubProducts(null);
+          setSubProducts([]);
+        }}
+        title={`Guarniciones - ${productForSubProducts?.name}`}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-600">
+              Gestiona las guarniciones asociadas a este producto
+            </p>
+            <button
+              onClick={() => productForSubProducts && openCreateSubProductModal(productForSubProducts)}
+              className="flex items-center gap-2 px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus size={16} />
+              Nueva Guarnición
+            </button>
+          </div>
+
+          {subProducts.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <List size={48} className="mx-auto mb-4 text-gray-300" />
+              <p>No hay guarniciones para este producto</p>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-lg divide-y max-h-96 overflow-y-auto">
+              {subProducts.map((subProduct) => (
+                <div key={subProduct.id} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-800">{subProduct.name}</div>
+                    {subProduct.description && (
+                      <div className="text-sm text-gray-500 mt-1">{subProduct.description}</div>
+                    )}
+                    <div className="text-sm text-primary-600 mt-1 font-medium">
+                      +${subProduct.price.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      subProduct.isAvailable 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {subProduct.isAvailable ? 'Disponible' : 'No disponible'}
+                    </span>
+                    <button
+                      onClick={() => openEditSubProductModal(subProduct)}
+                      className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-colors"
+                      title="Editar"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteSubProduct(subProduct)}
+                      className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-colors"
+                      title="Eliminar"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Create/Edit SubProduct Modal */}
+      <Modal
+        isOpen={isSubProductFormModalOpen}
+        onClose={() => setIsSubProductFormModalOpen(false)}
+        title={editingSubProduct ? '✏️ Editar Guarnición' : '➕ Nueva Guarnición'}
+        size="md"
+      >
+        <form onSubmit={handleSubProductSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="subProductName" className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre *
+            </label>
+            <input
+              type="text"
+              id="subProductName"
+              value={subProductFormData.name}
+              onChange={(e) => setSubProductFormData(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Nombre de la guarnición"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="subProductDescription" className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción
+            </label>
+            <textarea
+              id="subProductDescription"
+              value={subProductFormData.description || ''}
+              onChange={(e) => setSubProductFormData(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              placeholder="Descripción de la guarnición"
+              rows={2}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="subProductPrice" className="block text-sm font-medium text-gray-700 mb-1">
+                Precio Adicional *
+              </label>
+              <input
+                type="number"
+                id="subProductPrice"
+                value={subProductFormData.price}
+                onChange={(e) => setSubProductFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="0.00"
+                step="0.01"
+                min="0"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="subProductDisplayOrder" className="block text-sm font-medium text-gray-700 mb-1">
+                Orden
+              </label>
+              <input
+                type="number"
+                id="subProductDisplayOrder"
+                value={subProductFormData.displayOrder}
+                onChange={(e) => setSubProductFormData(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="0"
+                min="0"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="subProductIsAvailable" className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                id="subProductIsAvailable"
+                checked={subProductFormData.isAvailable}
+                onChange={(e) => setSubProductFormData(prev => ({ ...prev, isAvailable: e.target.checked }))}
+                className="w-4 h-4 accent-primary-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Guarnición disponible</span>
+            </label>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setIsSubProductFormModalOpen(false)}
+              className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={subProductFormLoading || !subProductFormData.productId}
+              className="flex-1 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {subProductFormLoading ? 'Guardando...' : (editingSubProduct ? 'Guardar Cambios' : 'Crear Guarnición')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete SubProduct Confirmation */}
+      <ConfirmModal
+        isOpen={!!deleteSubProduct}
+        onClose={() => setDeleteSubProduct(null)}
+        onConfirm={handleDeleteSubProduct}
+        title="Eliminar Guarnición"
+        message={`¿Estás seguro de eliminar "${deleteSubProduct?.name}"? Esta acción no se puede deshacer.`}
         confirmText="Eliminar"
         type="danger"
       />

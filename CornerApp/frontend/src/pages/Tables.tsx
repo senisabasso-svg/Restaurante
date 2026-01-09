@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { useToast } from '../components/Toast/ToastContext';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
-import type { Table, CreateTableRequest, UpdateTableRequest, TableStatus, Space, CreateSpaceRequest, Product, PaymentMethod, Order, Category } from '../types';
+import type { Table, CreateTableRequest, UpdateTableRequest, TableStatus, Space, CreateSpaceRequest, Product, PaymentMethod, Order, Category, SubProduct } from '../types';
 
 const TABLE_STATUSES: { value: TableStatus; label: string; color: string; bgColor: string }[] = [
   { value: 'Available', label: 'Disponible', color: 'text-green-700', bgColor: 'bg-green-100' },
@@ -60,9 +60,11 @@ export default function TablesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [orderItems, setOrderItems] = useState<Array<{ id: number; name: string; price: number; quantity: number }>>([]);
+  const [orderItems, setOrderItems] = useState<Array<{ id: number; name: string; price: number; quantity: number; subProducts?: Array<{ id: number; name: string; price: number }> }>>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [productQuantity, setProductQuantity] = useState(1);
+  const [productSubProducts, setProductSubProducts] = useState<SubProduct[]>([]);
+  const [selectedSubProducts, setSelectedSubProducts] = useState<number[]>([]);
   const [orderPaymentMethod, setOrderPaymentMethod] = useState<string>('cash');
   const [orderComments, setOrderComments] = useState<string>('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
@@ -358,6 +360,8 @@ export default function TablesPage() {
     setSelectedProductId(null);
     setSelectedCategoryId(null);
     setProductQuantity(1);
+    setProductSubProducts([]);
+    setSelectedSubProducts([]);
     setOrderPaymentMethod('cash');
     setOrderComments('');
     // Cargar categorías cuando se abre el modal
@@ -1427,6 +1431,8 @@ export default function TablesPage() {
           setOrderItems([]);
           setSelectedCategoryId(null);
           setSelectedProductId(null);
+          setProductSubProducts([]);
+          setSelectedSubProducts([]);
         }}
         title={`Crear Pedido - ${tableForOrder?.number}`}
         size="lg"
@@ -1487,9 +1493,18 @@ export default function TablesPage() {
                     .map((product) => (
                       <button
                         key={product.id}
-                        onClick={() => {
+                        onClick={async () => {
                           setSelectedProductId(product.id);
                           setProductQuantity(1);
+                          setSelectedSubProducts([]);
+                          // Cargar subproductos del producto seleccionado
+                          try {
+                            const subProducts = await api.getSubProductsByProduct(product.id);
+                            setProductSubProducts(subProducts.filter(sp => sp.isAvailable));
+                          } catch (error) {
+                            console.error('Error loading subproducts:', error);
+                            setProductSubProducts([]);
+                          }
                         }}
                         className={`p-3 border-2 rounded-lg text-left transition-all ${
                           selectedProductId === product.id
@@ -1518,34 +1533,80 @@ export default function TablesPage() {
                 )}
               </div>
 
+              {/* Subproductos (Guarniciones) */}
+              {selectedProductId && productSubProducts.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Guarniciones (opcional)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {productSubProducts.map((subProduct) => (
+                      <label
+                        key={subProduct.id}
+                        className="flex items-center gap-2 p-2 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedSubProducts.includes(subProduct.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSubProducts([...selectedSubProducts, subProduct.id]);
+                            } else {
+                              setSelectedSubProducts(selectedSubProducts.filter(id => id !== subProduct.id));
+                            }
+                          }}
+                          className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                        />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-800">{subProduct.name}</div>
+                          <div className="text-xs text-primary-600">+${subProduct.price.toFixed(2)}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Cantidad y botón agregar */}
               {selectedProductId && (
-                <div className="flex gap-2 items-center pt-2 border-t">
-                  <label className="text-sm font-medium text-gray-700">Cantidad:</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={productQuantity}
-                    onChange={(e) => setProductQuantity(Math.max(1, Number(e.target.value) || 1))}
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm font-medium text-gray-700">Cantidad:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={productQuantity}
+                      onChange={(e) => setProductQuantity(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                  </div>
                   <button
                     onClick={() => {
                       if (selectedProductId) {
                         const product = products.find(p => p.id === selectedProductId);
                         if (product) {
+                          const selectedSubs = productSubProducts.filter(sp => selectedSubProducts.includes(sp.id));
+                          const subProductsTotal = selectedSubs.reduce((sum, sp) => sum + sp.price, 0);
+                          
                           setOrderItems([...orderItems, {
                             id: product.id,
                             name: product.name,
-                            price: product.price,
+                            price: product.price + subProductsTotal,
                             quantity: productQuantity,
+                            subProducts: selectedSubs.map(sp => ({
+                              id: sp.id,
+                              name: sp.name,
+                              price: sp.price
+                            }))
                           }]);
                           setSelectedProductId(null);
                           setProductQuantity(1);
+                          setSelectedSubProducts([]);
+                          setProductSubProducts([]);
                         }
                       }
                     }}
-                    className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center justify-center gap-2"
+                    className="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center justify-center gap-2"
                   >
                     <Plus size={18} />
                     Agregar al Pedido
@@ -1563,9 +1624,14 @@ export default function TablesPage() {
               </label>
               <div className="border border-gray-200 rounded-lg divide-y">
                 {orderItems.map((item, index) => (
-                  <div key={index} className="p-3 flex items-center justify-between">
-                    <div>
+                  <div key={index} className="p-3 flex items-center justify-between border-b last:border-b-0">
+                    <div className="flex-1">
                       <div className="font-medium">{item.name}</div>
+                      {item.subProducts && item.subProducts.length > 0 && (
+                        <div className="text-xs text-gray-600 mt-1 ml-2">
+                          + {item.subProducts.map(sp => sp.name).join(', ')}
+                        </div>
+                      )}
                       <div className="text-sm text-gray-500">
                         {item.quantity}x ${item.price.toFixed(2)} = ${(item.quantity * item.price).toFixed(2)}
                       </div>
@@ -1626,6 +1692,8 @@ export default function TablesPage() {
                 setOrderItems([]);
                 setSelectedCategoryId(null);
                 setSelectedProductId(null);
+                setProductSubProducts([]);
+                setSelectedSubProducts([]);
               }}
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >

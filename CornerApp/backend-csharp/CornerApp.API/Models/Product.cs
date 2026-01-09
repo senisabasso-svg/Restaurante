@@ -22,5 +22,9 @@ public class Product
     // Propiedad para serialización JSON (incluir nombre de categoría como string)
     [System.Text.Json.Serialization.JsonPropertyName("category")]
     public string CategoryName => Category?.Name ?? string.Empty;
+    
+    // Relación con SubProducts (guarniciones)
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ICollection<SubProduct>? SubProducts { get; set; }
 }
 
