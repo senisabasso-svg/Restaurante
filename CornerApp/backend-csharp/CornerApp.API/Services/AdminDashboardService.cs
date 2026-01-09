@@ -339,9 +339,10 @@ public class AdminDashboardService : IAdminDashboardService
     /// </summary>
     public async Task<Category> CreateCategoryAsync(string name, string? description, string? icon)
     {
-        // Verificar si la categoría ya existe
+        // Verificar si la categoría ya existe (comparación case-insensitive)
+        var trimmedName = name.Trim().ToLower();
         var existingCategory = await _context.Categories
-            .FirstOrDefaultAsync(c => c.Name != null && c.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefaultAsync(c => c.Name != null && c.Name.ToLower() == trimmedName);
 
         if (existingCategory != null)
         {
@@ -349,11 +350,12 @@ public class AdminDashboardService : IAdminDashboardService
         }
 
         // Obtener el siguiente DisplayOrder
-        var maxDisplayOrder = await _context.Categories
+        var activeCategories = await _context.Categories
             .Where(c => c.IsActive)
             .Select(c => c.DisplayOrder)
-            .DefaultIfEmpty(0)
-            .MaxAsync();
+            .ToListAsync();
+        
+        var maxDisplayOrder = activeCategories.Any() ? activeCategories.Max() : 0;
 
         var category = new Category
         {
@@ -390,10 +392,10 @@ public class AdminDashboardService : IAdminDashboardService
             var currentName = category.Name ?? string.Empty;
             
             // Si el nombre cambió, verificar que no exista otra categoría con ese nombre
-            if (!currentName.Equals(trimmedName, StringComparison.OrdinalIgnoreCase))
+            if (currentName.ToLower() != trimmedName.ToLower())
             {
                 var existingCategory = await _context.Categories
-                    .FirstOrDefaultAsync(c => c.Name != null && c.Name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase) && c.Id != id);
+                    .FirstOrDefaultAsync(c => c.Name != null && c.Name.ToLower() == trimmedName.ToLower() && c.Id != id);
                 
                 if (existingCategory != null)
                 {
@@ -440,8 +442,9 @@ public class AdminDashboardService : IAdminDashboardService
     /// </summary>
     public async Task<bool> CategoryNameExistsAsync(string name, int? excludeId = null)
     {
+        var trimmedName = name.Trim().ToLower();
         var query = _context.Categories
-            .Where(c => c.Name != null && c.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase));
+            .Where(c => c.Name != null && c.Name.ToLower() == trimmedName);
 
         if (excludeId.HasValue)
         {

@@ -200,7 +200,7 @@ class ApiClient {
   }
 
   async createCategory(data: CreateCategoryRequest) {
-    return this.request<Category>('/admin/api/categories/create', { method: 'POST', body: data });
+    return this.request<Category>('/admin/api/categories', { method: 'POST', body: data });
   }
 
   async updateCategory(id: number, data: UpdateCategoryRequest) {
