@@ -942,26 +942,24 @@ export default function TablesPage() {
                               </div>
                             )}
                           </div>
-                          {table.status !== 'OrderPlaced' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openCreateOrderModal(table);
-                              }}
-                              className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-primary-500 hover:bg-primary-600 text-white text-xs rounded-lg shadow-lg flex items-center gap-1 transition-colors z-50"
-                              title="Crear pedido"
-                            >
-                              <ShoppingCart size={12} />
-                              Pedido
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openCreateOrderModal(table);
+                            }}
+                            className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-primary-500 hover:bg-primary-600 text-white text-xs rounded-lg shadow-lg flex items-center gap-1 transition-colors z-50"
+                            title="Crear pedido"
+                          >
+                            <ShoppingCart size={12} />
+                            Pedido
+                          </button>
                           {(table.status === 'OrderPlaced' || table.status === 'Occupied') && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openPaymentModal(table);
                               }}
-                              className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg shadow-lg flex items-center gap-1 transition-colors z-50"
+                              className="absolute -bottom-16 left-1/2 -translate-x-1/2 px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg shadow-lg flex items-center gap-1 transition-colors z-50"
                               title="Cobrar"
                             >
                               <CreditCard size={12} />
@@ -1070,18 +1068,16 @@ export default function TablesPage() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    {table.status !== 'OrderPlaced' && table.status !== 'Occupied' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openCreateOrderModal(table);
-                        }}
-                        className="w-full px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                      >
-                        <ShoppingCart size={16} />
-                        Crear Pedido
-                      </button>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCreateOrderModal(table);
+                      }}
+                      className="w-full px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                    >
+                      <ShoppingCart size={16} />
+                      Crear Pedido
+                    </button>
                     {(table.status === 'OrderPlaced' || table.status === 'Occupied') && (
                       <button
                         onClick={(e) => {

@@ -377,8 +377,13 @@ public class TablesController : ControllerBase
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            // Actualizar estado de la mesa
-            table.Status = "OrderPlaced";
+            // Actualizar estado de la mesa solo si está disponible
+            // Si ya está ocupada o tiene pedidos, mantener el estado actual
+            if (table.Status == "Available")
+            {
+                table.Status = "Occupied";
+            }
+            // Actualizar OrderPlacedAt para mostrar el último pedido
             table.OrderPlacedAt = DateTime.UtcNow;
             table.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
