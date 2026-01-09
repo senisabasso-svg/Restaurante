@@ -36,6 +36,13 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  subProducts?: OrderItemSubProduct[]; // Subproductos (guarniciones) asociados
+}
+
+export interface OrderItemSubProduct {
+  id: number;
+  name: string;
+  price: number;
 }
 
 export interface CreateOrderRequest {

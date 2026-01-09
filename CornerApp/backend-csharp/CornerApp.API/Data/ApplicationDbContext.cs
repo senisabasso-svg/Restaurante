@@ -195,6 +195,7 @@ public class ApplicationDbContext : DbContext
                 item.Property(i => i.ProductName).IsRequired().HasMaxLength(200);
                 item.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)").IsRequired();
                 item.Property(i => i.Quantity).IsRequired();
+                item.Property(i => i.SubProductsJson).HasMaxLength(2000); // JSON string para subproductos
                 item.ToTable("OrderItems");
                 item.HasIndex("OrderId");
             });

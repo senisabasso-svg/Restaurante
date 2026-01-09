@@ -592,9 +592,21 @@ export default function ActiveOrdersPage() {
             <div className="bg-gray-50 rounded-lg p-4">
               <h4 className="font-medium mb-2">🛒 Productos</h4>
               {selectedOrder.items?.map((item, idx) => (
-                <div key={idx} className="flex justify-between text-sm py-1">
-                  <span>{item.quantity}x {item.productName}</span>
-                  <span>${item.subtotal.toFixed(2)}</span>
+                <div key={idx} className="text-sm py-1">
+                  <div className="flex justify-between">
+                    <span>{item.quantity}x {item.productName}</span>
+                    <span>${item.subtotal.toFixed(2)}</span>
+                  </div>
+                  {item.subProducts && item.subProducts.length > 0 && (
+                    <div className="ml-4 mt-1 text-xs text-gray-600">
+                      {item.subProducts.map((sub, subIdx) => (
+                        <div key={subIdx} className="flex items-center gap-1">
+                          <span className="text-gray-500">+</span>
+                          <span>{sub.name} (+${sub.price.toFixed(2)})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               <div className="border-t mt-2 pt-2 flex justify-between font-bold">
@@ -793,7 +805,16 @@ function OrderCard({
         {/* Items Preview */}
         <div className="text-sm text-gray-600">
           {order.items?.slice(0, 2).map((item, idx) => (
-            <div key={idx}>{item.quantity}x {item.productName}</div>
+            <div key={idx}>
+              {item.quantity}x {item.productName}
+              {item.subProducts && item.subProducts.length > 0 && (
+                <div className="ml-4 text-xs text-gray-500">
+                  {item.subProducts.map((sub, subIdx) => (
+                    <div key={subIdx}>+ {sub.name}</div>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
           {order.items && order.items.length > 2 && (
             <div className="text-gray-400">+{order.items.length - 2} más...</div>

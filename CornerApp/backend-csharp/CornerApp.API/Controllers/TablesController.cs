@@ -346,14 +346,30 @@ public class TablesController : ControllerBase
             }
 
             // Crear items del pedido
-            var orderItems = orderRequest.Items.Select(item => new OrderItem
+            var orderItems = orderRequest.Items.Select(item => 
             {
-                ProductId = item.Id,
-                ProductName = (item.Name ?? "Producto sin nombre").Length > 200 
-                    ? (item.Name ?? "Producto sin nombre").Substring(0, 200) 
-                    : (item.Name ?? "Producto sin nombre"),
-                UnitPrice = item.Price >= 0 ? item.Price : 0,
-                Quantity = item.Quantity > 0 ? item.Quantity : 1
+                var orderItem = new OrderItem
+                {
+                    ProductId = item.Id,
+                    ProductName = (item.Name ?? "Producto sin nombre").Length > 200 
+                        ? (item.Name ?? "Producto sin nombre").Substring(0, 200) 
+                        : (item.Name ?? "Producto sin nombre"),
+                    UnitPrice = item.Price >= 0 ? item.Price : 0,
+                    Quantity = item.Quantity > 0 ? item.Quantity : 1
+                };
+                
+                // Agregar subproductos si existen
+                if (item.SubProducts != null && item.SubProducts.Any())
+                {
+                    orderItem.SubProducts = item.SubProducts.Select(sp => new Models.OrderItemSubProduct
+                    {
+                        Id = sp.Id,
+                        Name = sp.Name ?? string.Empty,
+                        Price = sp.Price
+                    }).ToList();
+                }
+                
+                return orderItem;
             }).ToList();
 
             // Crear el pedido

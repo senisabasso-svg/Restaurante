@@ -303,7 +303,7 @@ class ApiClient {
     return this.request<Table>(`/api/tables/${id}/status`, { method: 'PATCH', body: { status } });
   }
 
-  async createOrderFromTable(tableId: number, data: { items: Array<{ id: number; name: string; price: number; quantity: number }>; paymentMethod?: string; comments?: string }) {
+  async createOrderFromTable(tableId: number, data: { items: Array<{ id: number; name: string; price: number; quantity: number; subProducts?: Array<{ id: number; name: string; price: number }> }>; paymentMethod?: string; comments?: string }) {
     return this.request<{ id: number; message: string; order: Order; table: Table }>(`/api/tables/${tableId}/create-order`, { method: 'POST', body: data });
   }
 

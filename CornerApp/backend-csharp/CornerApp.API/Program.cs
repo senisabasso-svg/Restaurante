@@ -973,6 +973,25 @@ using (var scope = app.Services.CreateScope())
         {
             Log.Warning("⚠️ Tipo de base de datos no reconocido, no se puede crear tabla SubProducts automáticamente");
         }
+        
+        // Agregar columna SubProductsJson a OrderItems si no existe
+        if (dbContext.Database.IsSqlServer())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[OrderItems]') AND name = 'SubProductsJson')
+                BEGIN
+                    ALTER TABLE [dbo].[OrderItems] ADD [SubProductsJson] nvarchar(2000) NULL;
+                END
+            ");
+            Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems");
+        }
+        else if (dbContext.Database.IsSqlite())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                -- SQLite no soporta ALTER TABLE ADD COLUMN IF NOT EXISTS directamente
+                -- Se manejará automáticamente con migraciones de EF Core
+            ");
+        }
     }
     catch (Exception ex)
     {

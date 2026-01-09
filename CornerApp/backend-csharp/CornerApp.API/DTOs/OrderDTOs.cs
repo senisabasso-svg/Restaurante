@@ -64,6 +64,21 @@ public class OrderItemRequest
     [Required(ErrorMessage = "La cantidad es requerida")]
     [Range(1, 100, ErrorMessage = "La cantidad debe estar entre 1 y 100")]
     public int Quantity { get; set; }
+    
+    /// <summary>
+    /// Subproductos (guarniciones) asociados a este item
+    /// </summary>
+    public List<OrderItemSubProductRequest>? SubProducts { get; set; }
+}
+
+/// <summary>
+/// DTO para un subproducto (guarnición) en un item de pedido
+/// </summary>
+public class OrderItemSubProductRequest
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
 }
 
 /// <summary>

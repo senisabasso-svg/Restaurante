@@ -374,6 +374,16 @@ export default function KitchenPage() {
                                 {item.quantity}x
                               </span>
                               {item.productName}
+                              {item.subProducts && item.subProducts.length > 0 && (
+                                <div className="ml-4 mt-1 text-xs text-gray-600">
+                                  {item.subProducts.map((sub, subIdx) => (
+                                    <div key={subIdx} className="flex items-center gap-1">
+                                      <span className="text-orange-600">+</span>
+                                      <span>{sub.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -563,11 +573,23 @@ function KitchenOrderCard({
           <h4 className="text-sm font-bold text-orange-700 mb-3">🍳 PREPARAR:</h4>
           <div className="space-y-2">
             {order.items?.map((item, idx) => (
-              <div key={idx} className="text-base font-semibold text-orange-900 flex items-center gap-2">
-                <span className="bg-orange-200 text-orange-800 px-2 py-0.5 rounded text-sm font-bold">
-                  {item.quantity}x
-                </span>
-                <span>{item.productName}</span>
+              <div key={idx} className="text-base font-semibold text-orange-900">
+                <div className="flex items-center gap-2">
+                  <span className="bg-orange-200 text-orange-800 px-2 py-0.5 rounded text-sm font-bold">
+                    {item.quantity}x
+                  </span>
+                  <span>{item.productName}</span>
+                </div>
+                {item.subProducts && item.subProducts.length > 0 && (
+                  <div className="ml-8 mt-1 text-sm text-orange-700 font-normal">
+                    {item.subProducts.map((sub, subIdx) => (
+                      <div key={subIdx} className="flex items-center gap-1">
+                        <span className="text-orange-600 font-bold">+</span>
+                        <span>{sub.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

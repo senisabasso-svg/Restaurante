@@ -70,5 +70,51 @@ public class OrderItem
     public decimal UnitPrice { get; set; }
     public int Quantity { get; set; }
     public decimal Subtotal => UnitPrice * Quantity;
+    
+    // Subproductos (guarniciones) asociados a este item
+    // Se almacena como JSON string para flexibilidad
+    public string? SubProductsJson { get; set; }
+    
+    // Propiedad calculada para deserializar subproductos
+    // Se serializa como JSON en lugar de ignorarse para que esté disponible en las respuestas API
+    [System.Text.Json.Serialization.JsonPropertyName("subProducts")]
+    public List<OrderItemSubProduct>? SubProducts
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SubProductsJson))
+                return null;
+            
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<List<OrderItemSubProduct>>(SubProductsJson);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        set
+        {
+            if (value == null || !value.Any())
+            {
+                SubProductsJson = null;
+            }
+            else
+            {
+                SubProductsJson = System.Text.Json.JsonSerializer.Serialize(value);
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Representa un subproducto (guarnición) asociado a un item de pedido
+/// </summary>
+public class OrderItemSubProduct
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
 }
 
