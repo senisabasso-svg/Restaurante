@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Edit2, Trash2, Search, Table as TableIcon, Users, MapPin, Grid, List, Move, Building2, X, Clock, ShoppingCart, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Table as TableIcon, Users, MapPin, Grid, List, Move, Building2, X, Clock, ShoppingCart, CreditCard, DollarSign, AlertCircle } from 'lucide-react';
 import { api } from '../api/client';
 import { useToast } from '../components/Toast/ToastContext';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
-import type { Table, CreateTableRequest, UpdateTableRequest, TableStatus, Space, CreateSpaceRequest, Product, PaymentMethod, Order, Category, SubProduct } from '../types';
+import OpenCashRegisterModal from '../components/Modal/OpenCashRegisterModal';
+import CloseCashRegisterModal from '../components/Modal/CloseCashRegisterModal';
+import type { Table, CreateTableRequest, UpdateTableRequest, TableStatus, Space, CreateSpaceRequest, Product, PaymentMethod, Order, Category, SubProduct, CashRegisterStatus } from '../types';
 
 const TABLE_STATUSES: { value: TableStatus; label: string; color: string; bgColor: string }[] = [
   { value: 'Available', label: 'Disponible', color: 'text-green-700', bgColor: 'bg-green-100' },
@@ -77,6 +79,11 @@ export default function TablesPage() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [totalAmount, setTotalAmount] = useState(0);
 
+  // Cash Register state
+  const [cashRegisterStatus, setCashRegisterStatus] = useState<CashRegisterStatus | null>(null);
+  const [isOpenCashRegisterModalOpen, setIsOpenCashRegisterModalOpen] = useState(false);
+  const [isCloseCashRegisterModalOpen, setIsCloseCashRegisterModalOpen] = useState(false);
+
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -84,7 +91,39 @@ export default function TablesPage() {
     loadSpaces();
     loadProducts();
     loadPaymentMethods();
+    loadCashRegisterStatus();
   }, []);
+
+  const loadCashRegisterStatus = async () => {
+    try {
+      const status = await api.getCashRegisterStatus();
+      setCashRegisterStatus(status);
+    } catch (error) {
+      console.error('Error al cargar estado de caja:', error);
+    }
+  };
+
+  const handleOpenCashRegister = async (initialAmount: number) => {
+    try {
+      await api.openCashRegister(initialAmount);
+      showToast('Caja abierta exitosamente', 'success');
+      await loadCashRegisterStatus();
+    } catch (error: any) {
+      showToast(error.message || 'Error al abrir la caja', 'error');
+      throw error;
+    }
+  };
+
+  const handleCloseCashRegister = async (notes?: string) => {
+    try {
+      await api.closeCashRegister(notes);
+      showToast('Caja cerrada exitosamente', 'success');
+      await loadCashRegisterStatus();
+    } catch (error: any) {
+      showToast(error.message || 'Error al cerrar la caja', 'error');
+      throw error;
+    }
+  };
 
   // Función para calcular tiempo transcurrido
   const getTimeElapsed = (dateString: string) => {
@@ -376,6 +415,13 @@ export default function TablesPage() {
     }
 
     try {
+      // Verificar que la caja esté abierta
+      const cashRegisterStatus = await api.getCashRegisterStatus();
+      if (!cashRegisterStatus.isOpen) {
+        showToast('Debe abrir la caja antes de crear pedidos desde mesas', 'error');
+        return;
+      }
+
       setIsCreatingOrder(true);
       const response = await api.createOrderFromTable(tableForOrder.id, {
         items: orderItems,
@@ -532,6 +578,26 @@ export default function TablesPage() {
           <p className="text-gray-600 mt-1">Administra las mesas del restaurante</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Cash Register Button */}
+          {cashRegisterStatus?.isOpen ? (
+            <button
+              onClick={() => setIsCloseCashRegisterModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md"
+              title="Cerrar Caja"
+            >
+              <DollarSign size={20} />
+              <span>Cerrar Caja</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsOpenCashRegisterModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-md"
+              title="Abrir Caja"
+            >
+              <DollarSign size={20} />
+              <span>Abrir Caja</span>
+            </button>
+          )}
           {viewMode === 'floor' && (
             <button
               onClick={() => setEditMode(!editMode)}
@@ -1820,6 +1886,20 @@ export default function TablesPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Cash Register Modals */}
+      <OpenCashRegisterModal
+        isOpen={isOpenCashRegisterModalOpen}
+        onClose={() => setIsOpenCashRegisterModalOpen(false)}
+        onConfirm={handleOpenCashRegister}
+      />
+
+      <CloseCashRegisterModal
+        isOpen={isCloseCashRegisterModalOpen}
+        onClose={() => setIsCloseCashRegisterModalOpen(false)}
+        onConfirm={handleCloseCashRegister}
+        cashRegister={cashRegisterStatus?.cashRegister}
+      />
     </div>
   );
 }

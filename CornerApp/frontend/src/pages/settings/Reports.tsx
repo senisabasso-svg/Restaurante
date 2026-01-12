@@ -48,7 +48,8 @@ import type {
   ComparisonData,
   PeakHoursData,
   TopCustomer,
-  DeliveryPerformance
+  DeliveryPerformance,
+  CashRegistersReport
 } from '../../types';
 
 type Period = 'today' | 'week' | 'month' | 'year';
@@ -133,6 +134,7 @@ export default function ReportsPage() {
   const [peakHours, setPeakHours] = useState<PeakHoursData | null>(null);
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [deliveryPerformance, setDeliveryPerformance] = useState<DeliveryPerformance[]>([]);
+  const [cashRegistersReport, setCashRegistersReport] = useState<CashRegistersReport | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
 
@@ -143,7 +145,7 @@ export default function ReportsPage() {
   const loadReports = async () => {
     try {
       setLoading(true);
-      const [revenue, products, statistics, paymentRevenue, comp, hours, customers, delivery] = await Promise.all([
+      const [revenue, products, statistics, paymentRevenue, comp, hours, customers, delivery, cashRegisters] = await Promise.all([
         api.getRevenueReport(period),
         api.getTopProducts(period, 10),
         api.getReportStats(period),
@@ -152,6 +154,7 @@ export default function ReportsPage() {
         api.getPeakHours(period),
         api.getTopCustomers(period, 5),
         api.getDeliveryPerformance(period),
+        api.getCashRegistersReport(period),
       ]);
       setRevenueData(revenue);
       setTopProducts(products);
@@ -161,6 +164,7 @@ export default function ReportsPage() {
       setPeakHours(hours);
       setTopCustomers(customers);
       setDeliveryPerformance(delivery);
+      setCashRegistersReport(cashRegisters);
     } catch (error) {
       showToast('Error al cargar los reportes', 'error');
       console.error(error);
@@ -627,6 +631,98 @@ export default function ReportsPage() {
           </>
         )}
       </div>
+
+      {/* Reporte de Cajas */}
+      {cashRegistersReport && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <DollarSign size={20} className="text-primary-500" />
+            Reporte de Cajas
+          </h2>
+          
+          {cashRegistersReport.summary && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-gray-800">{cashRegistersReport.summary.totalCashRegisters}</div>
+                <div className="text-sm text-gray-500">Total Cajas</div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-green-600">{cashRegistersReport.summary.openCashRegisters}</div>
+                <div className="text-sm text-gray-500">Cajas Abiertas</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-blue-600">{formatCurrency(cashRegistersReport.summary.totalSales)}</div>
+                <div className="text-sm text-gray-500">Total Ventas</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-purple-600">{formatCurrency(cashRegistersReport.summary.totalCash)}</div>
+                <div className="text-sm text-gray-500">Total Efectivo</div>
+              </div>
+            </div>
+          )}
+
+          {cashRegistersReport.cashRegisters && cashRegistersReport.cashRegisters.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Apertura</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Cierre</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Inicial</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Ventas</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Efectivo</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">POS</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Transferencias</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Monto Final</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {cashRegistersReport.cashRegisters.map((cashRegister) => (
+                    <tr key={cashRegister.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {new Date(cashRegister.openedAt).toLocaleString('es-ES')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {cashRegister.closedAt ? new Date(cashRegister.closedAt).toLocaleString('es-ES') : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-medium text-gray-800">
+                        {formatCurrency(cashRegister.initialAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-medium text-gray-800">
+                        {formatCurrency(cashRegister.totalSales)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-green-600">
+                        {formatCurrency(cashRegister.totalCash)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-blue-600">
+                        {formatCurrency(cashRegister.totalPOS)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-purple-600">
+                        {formatCurrency(cashRegister.totalTransfer)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-primary-600">
+                        {formatCurrency(cashRegister.finalAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          cashRegister.isOpen 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {cashRegister.isOpen ? 'Abierta' : 'Cerrada'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-8">No hay cajas registradas para este período</p>
+          )}
+        </div>
+      )}
 
       {/* Resumen de estados */}
       {stats && (

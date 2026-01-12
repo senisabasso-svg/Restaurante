@@ -274,6 +274,16 @@ public class TablesController : ControllerBase
     {
         try
         {
+            // Verificar que la caja esté abierta
+            var openCashRegister = await _context.CashRegisters
+                .Where(c => c.IsOpen)
+                .FirstOrDefaultAsync();
+
+            if (openCashRegister == null)
+            {
+                return BadRequest(new { error = "Debe abrir la caja antes de crear pedidos desde mesas" });
+            }
+
             // Verificar que la mesa existe
             var table = await _context.Tables.FindAsync(id);
             if (table == null)

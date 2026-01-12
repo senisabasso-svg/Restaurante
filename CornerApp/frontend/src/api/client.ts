@@ -430,6 +430,35 @@ class ApiClient {
   async getExportData(period: string = 'month') {
     return this.request<ExportOrder[]>(`/admin/api/reports/export?period=${period}`);
   }
+
+  // Cash Register
+  async getCashRegisterStatus() {
+    return this.request<{ isOpen: boolean; cashRegister?: any }>('/admin/api/cash-register/status');
+  }
+
+  async openCashRegister(initialAmount: number) {
+    return this.request<any>('/admin/api/cash-register/open', {
+      method: 'POST',
+      body: { initialAmount },
+    });
+  }
+
+  async closeCashRegister(notes?: string) {
+    return this.request<any>('/admin/api/cash-register/close', {
+      method: 'POST',
+      body: { notes },
+    });
+  }
+
+  async getCashRegisterHistory(page: number = 1, pageSize: number = 20) {
+    return this.request<{ cashRegisters: any[]; total: number; page: number; pageSize: number; totalPages: number }>(
+      `/admin/api/cash-register/history?page=${page}&pageSize=${pageSize}`
+    );
+  }
+
+  async getCashRegistersReport(period: string = 'month') {
+    return this.request<any>(`/admin/api/reports/cash-registers?period=${period}`);
+  }
 }
 
 // Import types
@@ -474,7 +503,12 @@ import type {
   CreateSpaceRequest,
   SubProduct,
   CreateSubProductRequest,
-  UpdateSubProductRequest
+  UpdateSubProductRequest,
+  CashRegister,
+  CashRegisterStatus,
+  OpenCashRegisterRequest,
+  CloseCashRegisterRequest,
+  CashRegistersReport
 } from '../types';
 
 // Export singleton instance

@@ -539,3 +539,78 @@ export interface CreateSpaceRequest {
   name: string;
   description?: string;
 }
+
+// Cash Register types
+export interface CashRegister {
+  id: number;
+  openedAt: string;
+  closedAt?: string;
+  initialAmount: number;
+  finalAmount?: number;
+  totalSales: number;
+  totalCash: number;
+  totalPOS: number;
+  totalTransfer: number;
+  isOpen: boolean;
+  createdBy?: string;
+  closedBy?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CashRegisterStatus {
+  isOpen: boolean;
+  cashRegister?: {
+    id: number;
+    openedAt: string;
+    initialAmount: number;
+    totalSales: number;
+    totalCash: number;
+    totalPOS: number;
+    totalTransfer: number;
+    createdBy?: string;
+  };
+}
+
+export interface OpenCashRegisterRequest {
+  initialAmount: number;
+}
+
+export interface CloseCashRegisterRequest {
+  notes?: string;
+}
+
+export interface CashRegisterReport {
+  id: number;
+  openedAt: string;
+  closedAt?: string;
+  initialAmount: number;
+  finalAmount: number;
+  totalSales: number;
+  totalCash: number;
+  totalPOS: number;
+  totalTransfer: number;
+  ordersCount: number;
+  isOpen: boolean;
+  createdBy?: string;
+  closedBy?: string;
+  notes?: string;
+  duration: number; // horas
+}
+
+export interface CashRegistersReport {
+  period: string;
+  startDate: string;
+  endDate: string;
+  summary: {
+    totalCashRegisters: number;
+    openCashRegisters: number;
+    closedCashRegisters: number;
+    totalSales: number;
+    totalCash: number;
+    totalPOS: number;
+    totalTransfer: number;
+  };
+  cashRegisters: CashRegisterReport[];
+}
