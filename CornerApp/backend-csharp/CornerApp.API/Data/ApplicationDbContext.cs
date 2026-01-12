@@ -245,10 +245,12 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
             entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(500);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Role).IsRequired().HasMaxLength(50).HasDefaultValue("Employee");
             
             // Índices únicos
             entity.HasIndex(e => e.Username).IsUnique();
             entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => e.Role);
         });
 
         // Configurar Reward

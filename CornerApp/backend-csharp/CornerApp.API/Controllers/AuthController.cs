@@ -361,7 +361,7 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.NameIdentifier, admin.Id.ToString()),
             new Claim(ClaimTypes.Email, admin.Email ?? string.Empty),
             new Claim(ClaimTypes.Name, admin.Name),
-            new Claim(ClaimTypes.Role, "Admin") // Rol Admin
+            new Claim(ClaimTypes.Role, admin.Role ?? "Employee") // Rol del usuario (Admin o Employee)
         };
 
         var token = new JwtSecurityToken(
@@ -378,11 +378,11 @@ public class AuthController : ControllerBase
     // Endpoint temporal para crear usuario Admin (SOLO DESARROLLO)
     [HttpPost("admin/create-user")]
     [AllowAnonymous]
-    public async Task<IActionResult> CreateAdminUser([FromBody] CreateAdminUserRequest request)
+    public async Task<IActionResult> CreateAdminUser([FromBody] AdminCreateUserRequest? request)
     {
-        var email = request.Email ?? "berni2384@hotmail.com";
-        var password = request.Password ?? "berni1";
-        var name = request.Name ?? "Berni";
+        var email = request?.Email ?? "berni2384@hotmail.com";
+        var password = request?.Password ?? "berni1";
+        var name = request?.Name ?? "Berni";
 
         // Verificar si el usuario ya existe
         var existingAdmin = await _context.Admins
@@ -427,11 +427,11 @@ public class AuthController : ControllerBase
     }
 }
 
-public class CreateAdminUserRequest
+// Clase temporal para el endpoint de desarrollo
+public class AdminCreateUserRequest
 {
     public string? Email { get; set; }
     public string? Password { get; set; }
     public string? Name { get; set; }
 }
-
 

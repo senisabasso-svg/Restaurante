@@ -13,7 +13,7 @@ namespace CornerApp.API.Controllers;
 [ApiController]
 [Route("admin/api/reports")]
 [Tags("Administración - Reportes")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Employee")] // Admin y Employee pueden ver reportes
 public class AdminReportsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

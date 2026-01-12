@@ -19,6 +19,7 @@ import ActiveOrdersPage from './pages/ActiveOrders';
 import KitchenPage from './pages/Kitchen';
 import PaymentVerificationPage from './pages/PaymentVerification';
 import TablesPage from './pages/Tables';
+import AdminUsersPage from './pages/AdminUsers';
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/admin/categories" element={<CategoriesPage />} />
         <Route path="/admin/delivery-persons" element={<DeliveryPersonsPage />} />
         <Route path="/admin/customers" element={<CustomersPage />} />
+        <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/reports" element={<ReportsPage />} />
         {/* Settings sub-routes */}
         <Route path="/admin/settings" element={<Navigate to="/admin/settings/business" replace />} />

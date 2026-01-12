@@ -614,3 +614,29 @@ export interface CashRegistersReport {
   };
   cashRegisters: CashRegisterReport[];
 }
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  role: string; // "Admin" o "Employee"
+  createdAt: string;
+  updatedAt?: string;
+  lastLoginAt?: string;
+}
+
+export interface CreateAdminUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  name: string;
+  role: string; // "Admin" o "Employee"
+}
+
+export interface UpdateAdminUserRequest {
+  email?: string;
+  password?: string;
+  name?: string;
+  role?: string; // "Admin" o "Employee"
+}

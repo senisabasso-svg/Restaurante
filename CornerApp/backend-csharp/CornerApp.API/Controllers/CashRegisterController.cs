@@ -31,6 +31,7 @@ public class CashRegisterController : ControllerBase
     /// Obtiene el estado actual de la caja (si está abierta o cerrada)
     /// </summary>
     [HttpGet("status")]
+    [Authorize(Roles = "Admin,Employee")] // Admin y Employee pueden ver el estado
     public async Task<ActionResult> GetCashRegisterStatus()
     {
         try
@@ -85,9 +86,10 @@ public class CashRegisterController : ControllerBase
     }
 
     /// <summary>
-    /// Abre una nueva sesión de caja
+    /// Abre una nueva sesión de caja (solo Admin)
     /// </summary>
     [HttpPost("open")]
+    [Authorize(Roles = "Admin")] // Solo Admin puede abrir caja
     public async Task<ActionResult<CashRegister>> OpenCashRegister([FromBody] OpenCashRegisterRequest request)
     {
         try
@@ -132,9 +134,10 @@ public class CashRegisterController : ControllerBase
     }
 
     /// <summary>
-    /// Cierra la caja actual
+    /// Cierra la caja actual (solo Admin)
     /// </summary>
     [HttpPost("close")]
+    [Authorize(Roles = "Admin")] // Solo Admin puede cerrar caja
     public async Task<ActionResult<CashRegister>> CloseCashRegister([FromBody] CloseCashRegisterRequest? request)
     {
         try
@@ -253,6 +256,97 @@ public class CashRegisterController : ControllerBase
         {
             _logger.LogError(ex, "Error al obtener historial de cajas");
             return StatusCode(500, new { error = "Error al obtener el historial de cajas", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Obtiene los movimientos (pedidos) de una caja específica
+    /// </summary>
+    [HttpGet("{id}/movements")]
+    public async Task<ActionResult> GetCashRegisterMovements(int id)
+    {
+        try
+        {
+            var cashRegister = await _context.CashRegisters.FindAsync(id);
+            if (cashRegister == null)
+            {
+                return NotFound(new { error = "Caja no encontrada" });
+            }
+
+            var openedDate = cashRegister.OpenedAt.Date;
+            var now = DateTime.UtcNow;
+            var closedDate = cashRegister.ClosedAt?.Date ?? now.Date;
+
+            // Obtener todos los pedidos completados durante esta sesión de caja
+            var orders = await _context.Orders
+                .AsNoTracking()
+                .Include(o => o.Items)
+                .Where(o => o.CreatedAt >= openedDate
+                    && (cashRegister.ClosedAt == null || o.CreatedAt <= cashRegister.ClosedAt.Value)
+                    && o.Status == OrderConstants.STATUS_COMPLETED
+                    && !o.IsArchived)
+                .OrderByDescending(o => o.CreatedAt)
+                .Select(o => new
+                {
+                    id = o.Id,
+                    customerName = o.CustomerName,
+                    customerPhone = o.CustomerPhone,
+                    tableId = o.TableId,
+                    paymentMethod = o.PaymentMethod,
+                    total = o.Total,
+                    createdAt = o.CreatedAt,
+                    itemsCount = o.Items.Count,
+                    items = o.Items.Select(i => new
+                    {
+                        productName = i.ProductName,
+                        quantity = i.Quantity,
+                        unitPrice = i.UnitPrice,
+                        subtotal = i.Subtotal
+                    }).ToList()
+                })
+                .ToListAsync();
+
+            // Agrupar por método de pago
+            var byPaymentMethod = orders
+                .GroupBy(o => o.paymentMethod ?? "unknown")
+                .Select(g => new
+                {
+                    paymentMethod = g.Key,
+                    count = g.Count(),
+                    total = g.Sum(o => o.total)
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                cashRegister = new
+                {
+                    id = cashRegister.Id,
+                    openedAt = cashRegister.OpenedAt,
+                    closedAt = cashRegister.ClosedAt,
+                    initialAmount = cashRegister.InitialAmount,
+                    finalAmount = cashRegister.FinalAmount,
+                    isOpen = cashRegister.IsOpen,
+                    createdBy = cashRegister.CreatedBy,
+                    closedBy = cashRegister.ClosedBy,
+                    notes = cashRegister.Notes
+                },
+                orders,
+                summary = new
+                {
+                    totalOrders = orders.Count,
+                    totalSales = orders.Sum(o => o.total),
+                    totalCash = orders.Where(o => o.paymentMethod?.ToLower() == PaymentConstants.METHOD_CASH.ToLower()).Sum(o => o.total),
+                    totalPOS = orders.Where(o => o.paymentMethod?.ToLower() == PaymentConstants.METHOD_POS.ToLower()).Sum(o => o.total),
+                    totalTransfer = orders.Where(o => o.paymentMethod?.ToLower() == PaymentConstants.METHOD_TRANSFER.ToLower()).Sum(o => o.total),
+                    byPaymentMethod
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener movimientos de caja {CashRegisterId}", id);
+            return StatusCode(500, new { error = "Error al obtener movimientos de la caja", details = ex.Message });
         }
     }
 }

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   BarChart3, 
   TrendingUp,
-  TrendingDown,
   DollarSign,
   ShoppingCart,
   Package,
@@ -11,14 +10,11 @@ import {
   Loader2,
   ArrowUpRight,
   ArrowDownRight,
-  Percent,
   Clock,
   Users,
   Truck,
-  Download,
   FileSpreadsheet,
-  Award,
-  AlertTriangle
+  Award
 } from 'lucide-react';
 import {
   LineChart,
@@ -32,13 +28,13 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
-  Legend
+  ResponsiveContainer
 } from 'recharts';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { useToast } from '../../components/Toast/ToastContext';
 import Pagination from '../../components/Pagination/Pagination';
+import Modal from '../../components/Modal/Modal';
 import api from '../../api/client';
 import type { 
   RevenueData, 
@@ -137,6 +133,11 @@ export default function ReportsPage() {
   const [cashRegistersReport, setCashRegistersReport] = useState<CashRegistersReport | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
+  
+  // Cash Register Movements Modal
+  const [isCashRegisterMovementsModalOpen, setIsCashRegisterMovementsModalOpen] = useState(false);
+  const [cashRegisterMovements, setCashRegisterMovements] = useState<any>(null);
+  const [loadingMovements, setLoadingMovements] = useState(false);
 
   useEffect(() => {
     loadReports();
@@ -170,6 +171,21 @@ export default function ReportsPage() {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleViewCashRegisterMovements = async (cashRegisterId: number) => {
+    try {
+      setLoadingMovements(true);
+      setIsCashRegisterMovementsModalOpen(true);
+      const movements = await api.getCashRegisterMovements(cashRegisterId);
+      setCashRegisterMovements(movements);
+    } catch (error) {
+      showToast('Error al cargar los movimientos de la caja', 'error');
+      console.error(error);
+      setIsCashRegisterMovementsModalOpen(false);
+    } finally {
+      setLoadingMovements(false);
     }
   };
 
@@ -388,7 +404,7 @@ export default function ReportsPage() {
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
               <Tooltip 
-                formatter={(value: number) => [formatCurrency(value), 'Ingresos']}
+                formatter={(value: number | undefined) => [value !== undefined ? formatCurrency(value) : '$0', 'Ingresos']}
                 labelStyle={{ fontWeight: 'bold' }}
               />
               <Line 
@@ -463,7 +479,7 @@ export default function ReportsPage() {
             <CreditCard size={20} className="text-primary-500" />
             Ingresos por Método de Pago
           </h2>
-          
+          iego senisa 
           {revenueByPayment.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No hay datos para este período</p>
           ) : (
@@ -479,14 +495,14 @@ export default function ReportsPage() {
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   labelLine={false}
                 >
                   {revenueByPayment.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : '$0'} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -513,7 +529,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="hour" tick={{ fontSize: 11 }} tickFormatter={(h) => `${h}h`} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip 
-                  formatter={(value: number, name: string) => [value, name === 'ordersCount' ? 'Pedidos' : 'Ingresos']}
+                  formatter={(value: number | undefined, name?: string) => [value ?? 0, name === 'ordersCount' ? 'Pedidos' : 'Ingresos']}
                   labelFormatter={(h) => `${h}:00 - ${h}:59`}
                 />
                 <Bar dataKey="ordersCount" fill="#6366f1" radius={[4, 4, 0, 0]} />
@@ -582,7 +598,6 @@ export default function ReportsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {(() => {
-                    const totalPages = Math.ceil(deliveryPerformance.length / itemsPerPage);
                     const startIndex = (currentPage - 1) * itemsPerPage;
                     const endIndex = startIndex + itemsPerPage;
                     const paginatedPerformance = deliveryPerformance.slice(startIndex, endIndex);
@@ -679,7 +694,11 @@ export default function ReportsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {cashRegistersReport.cashRegisters.map((cashRegister) => (
-                    <tr key={cashRegister.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={cashRegister.id} 
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => handleViewCashRegisterMovements(cashRegister.id)}
+                    >
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {new Date(cashRegister.openedAt).toLocaleString('es-ES')}
                       </td>
@@ -750,6 +769,198 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Movimientos de Caja */}
+      <Modal
+        isOpen={isCashRegisterMovementsModalOpen}
+        onClose={() => {
+          setIsCashRegisterMovementsModalOpen(false);
+          setCashRegisterMovements(null);
+        }}
+        title="Movimientos de Caja"
+        size="xl"
+      >
+        {loadingMovements ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+          </div>
+        ) : cashRegisterMovements ? (
+          <div className="space-y-6">
+            {/* Información de la Caja */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-sm text-gray-500">Apertura:</span>
+                  <p className="font-medium text-gray-800">
+                    {new Date(cashRegisterMovements.cashRegister.openedAt).toLocaleString('es-ES')}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-gray-500">Cierre:</span>
+                  <p className="font-medium text-gray-800">
+                    {cashRegisterMovements.cashRegister.closedAt 
+                      ? new Date(cashRegisterMovements.cashRegister.closedAt).toLocaleString('es-ES')
+                      : 'Abierta'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-gray-500">Monto Inicial:</span>
+                  <p className="font-medium text-gray-800">
+                    {formatCurrency(cashRegisterMovements.cashRegister.initialAmount)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-gray-500">Monto Final:</span>
+                  <p className="font-medium text-gray-800">
+                    {cashRegisterMovements.cashRegister.finalAmount 
+                      ? formatCurrency(cashRegisterMovements.cashRegister.finalAmount)
+                      : '-'}
+                  </p>
+                </div>
+                {cashRegisterMovements.cashRegister.createdBy && (
+                  <div>
+                    <span className="text-sm text-gray-500">Abierta por:</span>
+                    <p className="font-medium text-gray-800">{cashRegisterMovements.cashRegister.createdBy}</p>
+                  </div>
+                )}
+                {cashRegisterMovements.cashRegister.closedBy && (
+                  <div>
+                    <span className="text-sm text-gray-500">Cerrada por:</span>
+                    <p className="font-medium text-gray-800">{cashRegisterMovements.cashRegister.closedBy}</p>
+                  </div>
+                )}
+              </div>
+              {cashRegisterMovements.cashRegister.notes && (
+                <div>
+                  <span className="text-sm text-gray-500">Notas:</span>
+                  <p className="font-medium text-gray-800">{cashRegisterMovements.cashRegister.notes}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Resumen */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-blue-600">{cashRegisterMovements.summary.totalOrders}</div>
+                <div className="text-sm text-gray-600">Total Pedidos</div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(cashRegisterMovements.summary.totalSales)}
+                </div>
+                <div className="text-sm text-gray-600">Total Ventas</div>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-yellow-600">
+                  {formatCurrency(cashRegisterMovements.summary.totalCash)}
+                </div>
+                <div className="text-sm text-gray-600">Efectivo</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4">
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(cashRegisterMovements.summary.totalPOS + cashRegisterMovements.summary.totalTransfer)}
+                </div>
+                <div className="text-sm text-gray-600">POS + Transfer</div>
+              </div>
+            </div>
+
+            {/* Desglose por Método de Pago */}
+            {cashRegisterMovements.summary.byPaymentMethod && cashRegisterMovements.summary.byPaymentMethod.length > 0 && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="font-semibold text-gray-800 mb-3">Desglose por Método de Pago</h3>
+                <div className="space-y-2">
+                  {cashRegisterMovements.summary.byPaymentMethod.map((method: any, index: number) => (
+                    <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                      <span className="text-sm font-medium text-gray-700 capitalize">
+                        {method.paymentMethod === 'cash' ? 'Efectivo' :
+                         method.paymentMethod === 'pos' ? 'POS' :
+                         method.paymentMethod === 'transfer' ? 'Transferencia' :
+                         method.paymentMethod}
+                      </span>
+                      <div className="text-right">
+                        <span className="text-sm font-bold text-gray-800">{method.count} pedidos</span>
+                        <span className="text-sm text-gray-600 ml-2">
+                          {formatCurrency(method.total)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Lista de Pedidos */}
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Pedidos ({cashRegisterMovements.orders.length})</h3>
+              <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+                {cashRegisterMovements.orders.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    No hay pedidos registrados para esta caja
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente/Mesa</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {cashRegisterMovements.orders.map((order: any) => (
+                        <tr key={order.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {new Date(order.createdAt).toLocaleString('es-ES')}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {order.customerName ? (
+                              <div>
+                                <div className="font-medium text-gray-800">{order.customerName}</div>
+                                {order.customerPhone && (
+                                  <div className="text-xs text-gray-500">{order.customerPhone}</div>
+                                )}
+                              </div>
+                            ) : order.tableId ? (
+                              <span className="text-gray-600">Mesa #{order.tableId}</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {order.itemsCount} {order.itemsCount === 1 ? 'item' : 'items'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              order.paymentMethod?.toLowerCase() === 'cash' ? 'bg-green-100 text-green-700' :
+                              order.paymentMethod?.toLowerCase() === 'pos' ? 'bg-blue-100 text-blue-700' :
+                              order.paymentMethod?.toLowerCase() === 'transfer' ? 'bg-purple-100 text-purple-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {order.paymentMethod === 'cash' ? 'Efectivo' :
+                               order.paymentMethod === 'pos' ? 'POS' :
+                               order.paymentMethod === 'transfer' ? 'Transferencia' :
+                               order.paymentMethod || '-'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm font-bold text-gray-800">
+                            {formatCurrency(order.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No se pudieron cargar los movimientos
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

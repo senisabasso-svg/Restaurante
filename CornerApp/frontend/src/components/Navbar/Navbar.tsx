@@ -20,7 +20,8 @@ import {
   Gift,
   CheckCircle,
   Mail,
-  Table as TableIcon
+  Table as TableIcon,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../api/client';
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
       { path: '/admin/products', label: 'Productos', icon: Package },
       { path: '/admin/categories', label: 'Categorías', icon: FolderOpen },
       { path: '/admin/customers', label: 'Clientes', icon: Users },
+      { path: '/admin/users', label: 'Usuarios Admin', icon: Shield },
       { path: '/admin/settings/payments', label: 'Métodos de Pago', icon: CreditCard },
       { path: '/admin/settings/email', label: 'Configuración de Email', icon: Mail },
       { path: '/admin/settings/rewards', label: 'Premios', icon: Gift },

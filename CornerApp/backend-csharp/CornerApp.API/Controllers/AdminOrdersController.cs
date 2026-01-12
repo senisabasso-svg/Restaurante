@@ -17,7 +17,7 @@ namespace CornerApp.API.Controllers;
 [ApiController]
 [Route("admin/api")]
 [Tags("Administración - Pedidos")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Employee")] // Admin y Employee pueden ver y gestionar pedidos
 public class AdminOrdersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -743,8 +743,8 @@ public class AdminOrdersController : ControllerBase
                 }
             }
 
-            // Si cambia a "en camino", verificar que tenga repartidor
-            if (request.Status == OrderConstants.STATUS_DELIVERING && !order.DeliveryPersonId.HasValue)
+            // Si cambia a "en camino", verificar que tenga repartidor (solo si NO es un pedido de mesa)
+            if (request.Status == OrderConstants.STATUS_DELIVERING && !order.DeliveryPersonId.HasValue && !order.TableId.HasValue)
             {
                 return BadRequest(new { error = "Debe asignar un repartidor antes de poner en camino" });
             }

@@ -14,7 +14,7 @@ namespace CornerApp.API.Controllers;
 [ApiController]
 [Route("admin/api/delivery-persons")]
 [Tags("Administración - Repartidores")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Employee")] // Admin y Employee pueden ver repartidores
 public class AdminDeliveryPersonsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

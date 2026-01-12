@@ -14,7 +14,7 @@ namespace CornerApp.API.Controllers;
 [ApiController]
 [Route("admin/api/categories")]
 [Tags("Administración - Categorías")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Employee")] // Admin y Employee pueden ver categorías
 public class AdminCategoriesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

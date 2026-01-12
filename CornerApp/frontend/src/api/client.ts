@@ -48,8 +48,21 @@ class ApiClient {
         throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
       }
 
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.message || `Error ${response.status}: ${response.statusText}`);
+      let errorData: any = {};
+      try {
+        const text = await response.text();
+        if (text) {
+          errorData = JSON.parse(text);
+        }
+      } catch (e) {
+        // Si no se puede parsear, usar el texto como mensaje
+        errorData = { error: await response.text().catch(() => response.statusText) };
+      }
+      
+      const errorMessage = errorData.error || errorData.message || errorData.details || `Error ${response.status}: ${response.statusText}`;
+      const error = new Error(errorMessage);
+      (error as any).response = { data: errorData, status: response.status };
+      throw error;
     }
 
     // Handle empty responses
@@ -458,6 +471,40 @@ class ApiClient {
 
   async getCashRegistersReport(period: string = 'month') {
     return this.request<any>(`/admin/api/reports/cash-registers?period=${period}`);
+  }
+
+  async getCashRegisterMovements(cashRegisterId: number) {
+    return this.request<any>(`/admin/api/cash-register/${cashRegisterId}/movements`);
+  }
+
+  // Admin Users
+  async getAdminUsers(search?: string) {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request<{ data: AdminUser[]; total: number }>(`/admin/api/users${query}`);
+  }
+
+  async getAdminUser(id: number) {
+    return this.request<AdminUser>(`/admin/api/users/${id}`);
+  }
+
+  async createAdminUser(user: CreateAdminUserRequest) {
+    return this.request<AdminUser>('/admin/api/users', {
+      method: 'POST',
+      body: user,
+    });
+  }
+
+  async updateAdminUser(id: number, user: UpdateAdminUserRequest) {
+    return this.request<AdminUser>(`/admin/api/users/${id}`, {
+      method: 'PUT',
+      body: user,
+    });
+  }
+
+  async deleteAdminUser(id: number) {
+    return this.request<{ message: string }>(`/admin/api/users/${id}`, {
+      method: 'DELETE',
+    });
   }
 }
 

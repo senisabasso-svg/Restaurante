@@ -32,9 +32,10 @@ public class AdminSettingsController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene todos los métodos de pago
+    /// Obtiene todos los métodos de pago (Admin y Employee pueden ver)
     /// </summary>
     [HttpGet("payment-methods")]
+    [Authorize(Roles = "Admin,Employee")] // Permitir a Employee ver métodos de pago
     public async Task<ActionResult> GetPaymentMethods()
     {
         await _adminDashboardService.EnsurePaymentMethodsExistAsync();

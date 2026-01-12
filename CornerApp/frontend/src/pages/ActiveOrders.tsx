@@ -892,14 +892,26 @@ function OrderCard({
           )}
           {order.status === 'preparing' && (
             <>
-              <button
-                onClick={onAssign}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-medium"
-                title="Asignar repartidor y enviar"
-              >
-                <UserPlus size={16} />
-                Asignar
-              </button>
+              {/* Si es pedido de mesa, permitir completar directamente sin repartidor */}
+              {order.tableId ? (
+                <button
+                  onClick={() => onStatusChange(order, 'completed')}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
+                  title="Marcar como completado (pedido de mesa)"
+                >
+                  <PackageCheck size={16} />
+                  Completar
+                </button>
+              ) : (
+                <button
+                  onClick={onAssign}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-medium"
+                  title="Asignar repartidor y enviar"
+                >
+                  <UserPlus size={16} />
+                  Asignar
+                </button>
+              )}
               <button
                 onClick={onCancel}
                 className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
@@ -990,9 +1002,16 @@ function TableActions({
       )}
       {order.status === 'preparing' && (
         <>
-          <button onClick={onAssign} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Asignar repartidor y enviar">
-            <UserPlus size={16} />
-          </button>
+          {/* Si es pedido de mesa, permitir completar directamente sin repartidor */}
+          {order.tableId ? (
+            <button onClick={() => onStatusChange(order, 'completed')} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="Marcar como completado (pedido de mesa)">
+              <PackageCheck size={16} />
+            </button>
+          ) : (
+            <button onClick={onAssign} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Asignar repartidor y enviar">
+              <UserPlus size={16} />
+            </button>
+          )}
           <button onClick={onCancel} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="Cancelar pedido - El cliente será notificado">
             <XCircle size={16} />
           </button>

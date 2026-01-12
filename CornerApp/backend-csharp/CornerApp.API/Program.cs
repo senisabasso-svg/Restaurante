@@ -828,8 +828,8 @@ if (app.Environment.IsDevelopment())
                 Log.Warning(ex, "Advertencia al aplicar migración de Spaces (puede que ya esté aplicada)");
             }
             
-            // Crear admin por defecto si no existe
-            var existingAdmin = await dbContext.Admins.FirstOrDefaultAsync();
+            // Crear admin por defecto si no existe o actualizar contraseña si existe
+            var existingAdmin = await dbContext.Admins.FirstOrDefaultAsync(a => a.Username.ToLower() == "admin");
             if (existingAdmin == null)
             {
                 var admin = new CornerApp.API.Models.Admin
@@ -837,12 +837,21 @@ if (app.Environment.IsDevelopment())
                     Username = "admin",
                     Email = "admin@cornerapp.com",
                     Name = "Administrador",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("adminadmin123"),
+                    Role = "Admin",
                     CreatedAt = DateTime.UtcNow
                 };
                 dbContext.Admins.Add(admin);
                 await dbContext.SaveChangesAsync();
-                Log.Information("✅ Administrador por defecto creado: usuario 'admin', contraseña 'admin123'");
+                Log.Information("✅ Administrador por defecto creado: usuario 'admin', contraseña 'adminadmin123'");
+            }
+            else
+            {
+                // Actualizar contraseña del usuario admin existente
+                existingAdmin.PasswordHash = BCrypt.Net.BCrypt.HashPassword("adminadmin123");
+                existingAdmin.UpdatedAt = DateTime.UtcNow;
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Contraseña del administrador 'admin' actualizada a 'adminadmin123'");
             }
             
             // Crear usuario berni2384@hotmail.com si no existe
