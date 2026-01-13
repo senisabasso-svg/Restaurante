@@ -22,7 +22,7 @@ import { useNotificationSound, getTimeElapsed } from '../hooks/useNotificationSo
 import Pagination from '../components/Pagination/Pagination';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
-import type { Order, OrderStatus, DeliveryPerson } from '../types';
+import type { Order, OrderStatus, DeliveryPerson, Table } from '../types';
 
 const statusConfig: Record<OrderStatus, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
   pending: { label: 'Pendiente', color: 'text-yellow-600', bgColor: 'bg-yellow-100', icon: Clock },
@@ -35,12 +35,33 @@ const statusConfig: Record<OrderStatus, { label: string; color: string; bgColor:
 // Estados de cocina (solo preparando)
 const KITCHEN_STATUSES: OrderStatus[] = ['preparing'];
 
+// Función helper para verificar si un item es una bebida
+const isBebida = (item: { categoryName?: string | null }): boolean => {
+  const categoryName = item.categoryName?.toLowerCase()?.trim() || '';
+  return categoryName === 'bebida' || categoryName === 'bebidas' || categoryName.includes('bebida');
+};
+
+// Función helper para verificar si un pedido tiene items para preparar (no solo bebidas)
+const hasItemsToPrepare = (order: Order): boolean => {
+  if (!order.items || order.items.length === 0) return false;
+  const itemsToPrepare = order.items.filter(item => !isBebida(item));
+  return itemsToPrepare.length > 0;
+};
+
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
+  const [tables, setTables] = useState<Table[]>([]); // Para mapear tableId a número de mesa
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [isConnected, setIsConnected] = useState(false);
+  
+  // Mapa para obtener el número de mesa por tableId
+  const getTableNumber = (tableId: number | null | undefined): string | null => {
+    if (!tableId) return null;
+    const table = tables.find(t => t.id === tableId);
+    return table?.number || null;
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
 
@@ -69,8 +90,10 @@ export default function KitchenPage() {
 
     const orderStatus = order.status as OrderStatus;
     console.log('🆕 Kitchen: ¿Está en KITCHEN_STATUSES?', KITCHEN_STATUSES.includes(orderStatus));
+    console.log('🆕 Kitchen: ¿Tiene items para preparar?', hasItemsToPrepare(order));
 
-    if (KITCHEN_STATUSES.includes(orderStatus)) {
+    // Solo agregar si está en estados de cocina Y tiene items para preparar (no solo bebidas)
+    if (KITCHEN_STATUSES.includes(orderStatus) && hasItemsToPrepare(order)) {
       // Asegurar que el objeto order tenga todos los campos necesarios
       const normalizedOrder: Order = {
         ...order,
@@ -103,19 +126,24 @@ export default function KitchenPage() {
   }, [showToast, playSound]);
 
   const handleOrderUpdated = useCallback((order: Order) => {
-    if (KITCHEN_STATUSES.includes(order.status)) {
+    if (KITCHEN_STATUSES.includes(order.status) && hasItemsToPrepare(order)) {
       setOrders(prev => prev.map(o => o.id === order.id ? order : o));
     } else {
-      // Si ya no es de cocina (pasó a delivering, completed, etc), removerlo
+      // Si ya no es de cocina (pasó a delivering, completed, etc) o solo tiene bebidas, removerlo
       setOrders(prev => prev.filter(o => o.id !== order.id));
     }
   }, []);
 
   const handleOrderStatusChanged = useCallback((event: { orderId: number; status: string }) => {
     if (KITCHEN_STATUSES.includes(event.status as OrderStatus)) {
-      setOrders(prev => prev.map(o =>
-        o.id === event.orderId ? { ...o, status: event.status as OrderStatus } : o
-      ));
+      // Actualizar el pedido y verificar si tiene items para preparar
+      setOrders(prev => {
+        const updated = prev.map(o =>
+          o.id === event.orderId ? { ...o, status: event.status as OrderStatus } : o
+        );
+        // Filtrar pedidos que solo tienen bebidas después de la actualización
+        return updated.filter(o => hasItemsToPrepare(o));
+      });
     } else {
       // Si cambió a delivering, completed o cancelled, removerlo de la cocina
       setOrders(prev => prev.filter(o => o.id !== event.orderId));
@@ -144,18 +172,36 @@ export default function KitchenPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [ordersResponse, deliveryData] = await Promise.all([
+      const [ordersResponse, deliveryData, tablesData] = await Promise.all([
         api.getActiveOrders(),
         api.getActiveDeliveryPersons(),
+        api.getTables(), // Cargar mesas para obtener números
       ]);
       // El backend devuelve una respuesta paginada con propiedad 'data'
       const ordersArray = Array.isArray(ordersResponse)
         ? ordersResponse
         : (ordersResponse as any)?.data || [];
-      // Filtrar solo los pedidos de cocina (solo preparing)
-      const kitchenOrders = ordersArray.filter((o: Order) => KITCHEN_STATUSES.includes(o.status));
+      // Filtrar solo los pedidos de cocina (solo preparing) que tienen items para preparar (no solo bebidas)
+      const kitchenOrders = ordersArray.filter((o: Order) => 
+        KITCHEN_STATUSES.includes(o.status) && hasItemsToPrepare(o)
+      );
+      
+      // Debug: Log de categorías en los items y información de mesa
+      kitchenOrders.forEach((order: Order) => {
+        console.log(`📋 Pedido #${order.id}:`, {
+          tableId: order.tableId,
+          table: order.table,
+          tableNumber: order.table?.number,
+          hasTable: !!order.table
+        });
+        order.items?.forEach(item => {
+          console.log('📦 Kitchen Item:', item.productName, 'Categoría:', item.categoryName, 'CategoryId:', item.categoryId);
+        });
+      });
+      
       setOrders(kitchenOrders);
       setDeliveryPersons(Array.isArray(deliveryData) ? deliveryData : []);
+      setTables(Array.isArray(tablesData) ? tablesData : []);
     } catch (error) {
       showToast('Error al cargar pedidos de cocina', 'error');
       console.error(error);
@@ -194,8 +240,8 @@ export default function KitchenPage() {
     setSelectedDeliveryPersonId(null);
   };
 
-  // Asegurar que orders siempre sea un array
-  const safeOrders = Array.isArray(orders) ? orders : [];
+  // Asegurar que orders siempre sea un array y filtrar pedidos que solo tienen bebidas
+  const safeOrders = (Array.isArray(orders) ? orders : []).filter(o => hasItemsToPrepare(o));
 
   // Agrupar pedidos por estado
   const groupedOrders = KITCHEN_STATUSES.reduce((acc, status) => {
@@ -220,7 +266,16 @@ export default function KitchenPage() {
   useEffect(() => {
     console.log('📊 Kitchen: Estado de orders actualizado. Cantidad:', safeOrders.length);
     console.log('📊 Kitchen: IDs de pedidos:', safeOrders.map(o => o.id));
-    console.log('📊 Kitchen: Orders completo:', orders);
+    
+    // Log detallado de items y categorías
+    safeOrders.forEach((order: Order) => {
+      console.log(`📦 Pedido #${order.id}:`);
+      order.items?.forEach(item => {
+        const categoryName = item.categoryName?.toLowerCase()?.trim() || '';
+        const isBebida = categoryName === 'bebida' || categoryName === 'bebidas' || categoryName.includes('bebida');
+        console.log(`  - ${item.productName}: categoryName="${item.categoryName}", categoryId=${item.categoryId}, isBebida=${isBebida}`);
+      });
+    });
   }, [orders]);
 
   if (loading) {
@@ -321,6 +376,7 @@ export default function KitchenPage() {
                       onStatusChange={handleStatusChange}
                       onAssign={() => openAssignModal(order)}
                       onCancel={() => setConfirmAction({ type: 'cancel', order })}
+                      getTableNumber={getTableNumber}
                     />
                   ))}
                 </div>
@@ -344,7 +400,7 @@ export default function KitchenPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {paginatedOrders.map(order => {
+                  {paginatedOrders.map(order => {
                   const status = statusConfig[order.status];
                   const StatusIcon = status.icon;
                   const elapsed = getTimeElapsed(order.updatedAt || order.createdAt);
@@ -352,7 +408,19 @@ export default function KitchenPage() {
                   return (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        <span className="text-xl font-bold text-primary-600">#{order.id}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl font-bold text-primary-600">#{order.id}</span>
+                          {/* Indicador de Salón/Delivery */}
+                          {order.tableId != null ? (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">
+                              Mesa {order.table?.number || getTableNumber(order.tableId) || order.tableId} - Salón
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-bold">
+                              Delivery
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.bgColor} ${status.color}`}>
@@ -368,7 +436,9 @@ export default function KitchenPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="space-y-1">
-                          {order.items?.map((item, idx) => (
+                          {order.items
+                            ?.filter(item => !isBebida(item))
+                            .map((item, idx) => (
                             <div key={idx} className="text-sm font-medium text-gray-800">
                               <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-bold mr-1">
                                 {item.quantity}x
@@ -518,12 +588,14 @@ function KitchenOrderCard({
   order,
   onStatusChange,
   onAssign,
-  onCancel
+  onCancel,
+  getTableNumber
 }: {
   order: Order;
-  onStatusChange: (order: Order, status: OrderStatus) => void;
+  onStatusChange: (order: Order, status: OrderStatus, deliveryPersonId?: number) => void;
   onAssign: () => void;
   onCancel: () => void;
+  getTableNumber: (tableId: number | null | undefined) => string | null;
 }) {
   const status = statusConfig[order.status];
   const StatusIcon = status.icon;
@@ -537,7 +609,19 @@ function KitchenOrderCard({
       {/* Header - Solo número, estado y tiempo */}
       <div className="p-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
-          <span className="text-2xl font-bold text-primary-600">#{order.id}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-bold text-primary-600">#{order.id}</span>
+            {/* Indicador de Salón/Delivery */}
+            {order.tableId != null ? (
+              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">
+                Mesa {order.table?.number || getTableNumber(order.tableId) || order.tableId} - Salón
+              </span>
+            ) : (
+              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-bold">
+                Delivery
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${status.bgColor} ${status.color}`}>
               <StatusIcon size={14} />
@@ -568,11 +652,13 @@ function KitchenOrderCard({
 
       {/* Body - Solo productos */}
       <div className="p-4 space-y-3">
-        {/* Items - Prominentes para la cocina */}
+        {/* Items - Prominentes para la cocina (excluyendo bebidas) */}
         <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
           <h4 className="text-sm font-bold text-orange-700 mb-3">🍳 PREPARAR:</h4>
           <div className="space-y-2">
-            {order.items?.map((item, idx) => (
+            {order.items
+              ?.filter(item => !isBebida(item))
+              .map((item, idx) => (
               <div key={idx} className="text-base font-semibold text-orange-900">
                 <div className="flex items-center gap-2">
                   <span className="bg-orange-200 text-orange-800 px-2 py-0.5 rounded text-sm font-bold">
@@ -628,14 +714,27 @@ function KitchenOrderCard({
           )}
           {order.status === 'preparing' && (
             <>
-              <button
-                onClick={onAssign}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-base font-bold"
-                title="Listo - Asignar repartidor"
-              >
-                <CheckCircle size={20} />
-                ¡Listo!
-              </button>
+              {order.tableId != null ? (
+                // Pedido de salón: completar directamente sin asignar repartidor
+                <button
+                  onClick={() => onStatusChange(order, 'completed')}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-base font-bold"
+                  title="Marcar como completado (Salón)"
+                >
+                  <CheckCircle size={20} />
+                  ¡Listo!
+                </button>
+              ) : (
+                // Pedido de delivery: abrir modal para asignar repartidor
+                <button
+                  onClick={onAssign}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-base font-bold"
+                  title="Listo - Asignar repartidor"
+                >
+                  <CheckCircle size={20} />
+                  ¡Listo!
+                </button>
+              )}
               <button
                 onClick={onCancel}
                 className="px-4 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
@@ -659,7 +758,7 @@ function KitchenTableActions({
   onCancel
 }: {
   order: Order;
-  onStatusChange: (order: Order, status: OrderStatus) => void;
+  onStatusChange: (order: Order, status: OrderStatus, deliveryPersonId?: number) => void;
   onAssign: () => void;
   onCancel: () => void;
 }) {
@@ -677,9 +776,21 @@ function KitchenTableActions({
       )}
       {order.status === 'preparing' && (
         <>
-          <button onClick={onAssign} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Listo - Asignar repartidor">
-            <UserPlus size={16} />
-          </button>
+          {order.tableId != null ? (
+            // Pedido de salón: completar directamente sin asignar repartidor
+            <button 
+              onClick={() => onStatusChange(order, 'completed')} 
+              className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" 
+              title="Marcar como completado (Salón)"
+            >
+              <CheckCircle2 size={16} />
+            </button>
+          ) : (
+            // Pedido de delivery: abrir modal para asignar repartidor
+            <button onClick={onAssign} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Listo - Asignar repartidor">
+              <UserPlus size={16} />
+            </button>
+          )}
           <button onClick={onCancel} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="Cancelar pedido">
             <XCircle size={16} />
           </button>

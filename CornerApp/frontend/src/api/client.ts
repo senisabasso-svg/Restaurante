@@ -155,15 +155,47 @@ class ApiClient {
   }
 
   async getOrdersByTable(tableId: number) {
-    const orders = await this.getOrders({ showArchived: false });
-    // Filtrar pedidos de la mesa que no estén completados o cancelados
-    const tableOrders = orders.data.filter(
-      (order: Order) => 
-        order.tableId === tableId && 
-        order.status !== 'completed' && 
-        order.status !== 'cancelled'
+    const ordersResponse = await this.getOrders({ showArchived: false });
+    
+    // Manejar diferentes estructuras de respuesta
+    let ordersArray: Order[] = [];
+    
+    if (Array.isArray(ordersResponse)) {
+      // Si la respuesta es directamente un array
+      ordersArray = ordersResponse;
+    } else if (ordersResponse?.data && Array.isArray(ordersResponse.data)) {
+      // Si la respuesta tiene una propiedad 'data' con el array
+      ordersArray = ordersResponse.data;
+    } else {
+      console.warn('getOrdersByTable: Estructura de respuesta inesperada', ordersResponse);
+      return [];
+    }
+    
+    // Convertir tableId a número para comparación
+    const tableIdNum = Number(tableId);
+    
+    const tableOrders = ordersArray.filter(
+      (order: Order) => {
+        if (!order) return false;
+        
+        const orderTableId = order.tableId ? Number(order.tableId) : null;
+        const matchesTable = orderTableId === tableIdNum;
+        const isActive = order.status !== 'completed' && order.status !== 'cancelled';
+        
+        if (matchesTable) {
+          console.log(`Pedido #${order.id} - tableId: ${orderTableId}, status: ${order.status}, activo: ${isActive}`);
+        }
+        
+        return matchesTable && isActive;
+      }
     );
+    
+    console.log(`getOrdersByTable: Encontrados ${tableOrders.length} pedidos para mesa ${tableId} de ${ordersArray.length} totales`);
     return tableOrders;
+  }
+
+  async deleteOrderItem(orderId: number, itemId: number) {
+    return this.request<{ success: boolean; message: string; order: Order }>(`/api/tables/orders/${orderId}/items/${itemId}`, { method: 'DELETE' });
   }
 
   async processTablePayment(orderId: number, paymentMethod: string) {

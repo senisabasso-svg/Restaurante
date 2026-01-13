@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import {
   Clock,
   CheckCircle,
@@ -41,6 +41,7 @@ const statusConfig: Record<OrderStatus, { label: string; color: string; bgColor:
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'preparing', 'delivering'];
 
 export default function ActiveOrdersPage() {
+  const location = useLocation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +49,11 @@ export default function ActiveOrdersPage() {
   const [isConnected, setIsConnected] = useState(false);
 
   const [searchParams] = useSearchParams();
+
+  // Determinar el tipo de filtro según la ruta
+  const orderType = location.pathname.includes('/salon') ? 'salon' : 
+                    location.pathname.includes('/delivery') ? 'delivery' : 
+                    'all';
 
   // Inicializar filtros desde la URL
   useEffect(() => {
@@ -94,6 +100,15 @@ export default function ActiveOrdersPage() {
         updatedAt: order.updatedAt || new Date().toISOString(),
       };
 
+      // Filtrar según el tipo de pedido
+      const shouldInclude = orderType === 'all' || 
+                           (orderType === 'salon' && normalizedOrder.tableId != null) ||
+                           (orderType === 'delivery' && normalizedOrder.tableId == null);
+
+      if (!shouldInclude) {
+        return; // No agregar este pedido si no corresponde al tipo actual
+      }
+
       setOrders(prev => {
         // Evitar duplicados
         const exists = prev.some(o => o.id === normalizedOrder.id);
@@ -114,28 +129,53 @@ export default function ActiveOrdersPage() {
     } else {
       console.log('ℹ️ ActiveOrders: Pedido no es activo, ignorando. Status:', orderStatus);
     }
-  }, [showToast, playSound]);
+  }, [showToast, playSound, orderType]);
 
   const handleOrderUpdated = useCallback((order: Order) => {
     if (ACTIVE_STATUSES.includes(order.status)) {
-      setOrders(prev => prev.map(o => o.id === order.id ? order : o));
+      // Verificar si el pedido corresponde al tipo actual
+      const shouldInclude = orderType === 'all' || 
+                           (orderType === 'salon' && order.tableId != null) ||
+                           (orderType === 'delivery' && order.tableId == null);
+      
+      if (shouldInclude) {
+        setOrders(prev => prev.map(o => o.id === order.id ? order : o));
+      } else {
+        // Si el pedido cambió de tipo (ej: de salón a delivery), removerlo
+        setOrders(prev => prev.filter(o => o.id !== order.id));
+      }
     } else {
       // Si ya no es activo, removerlo
       setOrders(prev => prev.filter(o => o.id !== order.id));
     }
-  }, []);
+  }, [orderType]);
 
   const handleOrderStatusChanged = useCallback((event: { orderId: number; status: string }) => {
     if (ACTIVE_STATUSES.includes(event.status as OrderStatus)) {
-      setOrders(prev => prev.map(o =>
-        o.id === event.orderId ? { ...o, status: event.status as OrderStatus } : o
-      ));
+      setOrders(prev => {
+        const order = prev.find(o => o.id === event.orderId);
+        if (!order) return prev;
+        
+        // Verificar si el pedido actualizado corresponde al tipo actual
+        const shouldInclude = orderType === 'all' || 
+                             (orderType === 'salon' && order.tableId != null) ||
+                             (orderType === 'delivery' && order.tableId == null);
+        
+        if (shouldInclude) {
+          return prev.map(o =>
+            o.id === event.orderId ? { ...o, status: event.status as OrderStatus } : o
+          );
+        } else {
+          // Si el pedido no corresponde al tipo actual, removerlo
+          return prev.filter(o => o.id !== event.orderId);
+        }
+      });
     } else {
       // Si cambió a completado o cancelado, removerlo
       setOrders(prev => prev.filter(o => o.id !== event.orderId));
       showToast(`Pedido #${event.orderId} ${event.status === 'completed' ? 'completado' : 'actualizado'} `, 'info');
     }
-  }, [showToast]);
+  }, [showToast, orderType]);
 
   const handleOrderDeleted = useCallback((event: { orderId: number }) => {
     setOrders(prev => prev.filter(o => o.id !== event.orderId));
@@ -151,7 +191,7 @@ export default function ActiveOrdersPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [orderType]); // Recargar cuando cambie el tipo de pedido
 
   // Polling periódico como respaldo de SignalR (cada 10 segundos)
   useEffect(() => {
@@ -170,19 +210,22 @@ export default function ActiveOrdersPage() {
               ? ordersResponse
               : (ordersResponse as any)?.data || [];
             
+            // Filtrar según el tipo de pedido
+            const filteredOrders = filterOrdersByType(ordersArray);
+            
             setOrders(prev => {
               const currentIds = new Set(prev.map(o => o.id));
-              const newIds = new Set(ordersArray.map((o: Order) => o.id));
+              const newIds = new Set(filteredOrders.map((o: Order) => o.id));
               
               // Verificar si hay pedidos nuevos
-              const newOrders = ordersArray.filter((o: Order) => !currentIds.has(o.id));
+              const newOrders = filteredOrders.filter((o: Order) => !currentIds.has(o.id));
               if (newOrders.length > 0) {
                 console.log('🆕 Polling detectó nuevos pedidos:', newOrders.map((o: Order) => o.id));
                 // Agregar nuevos pedidos al inicio
                 return [...newOrders, ...prev];
               }
               
-              // Verificar si hay pedidos que desaparecieron (completados/cancelados)
+              // Verificar si hay pedidos que desaparecieron (completados/cancelados o cambiaron de tipo)
               const removedIds = prev.filter(o => !newIds.has(o.id)).map(o => o.id);
               if (removedIds.length > 0) {
                 console.log('🗑️ Polling detectó pedidos removidos:', removedIds);
@@ -191,7 +234,7 @@ export default function ActiveOrdersPage() {
               
               // Actualizar pedidos existentes si hay cambios
               const updated = prev.map(prevOrder => {
-                const updatedOrder = ordersArray.find((o: Order) => o.id === prevOrder.id);
+                const updatedOrder = filteredOrders.find((o: Order) => o.id === prevOrder.id);
                 return updatedOrder || prevOrder;
               });
               
@@ -207,7 +250,20 @@ export default function ActiveOrdersPage() {
     }, 10000); // Cada 10 segundos
 
     return () => clearInterval(interval);
-  }, [isConnected]);
+  }, [isConnected, orderType]); // Incluir orderType en las dependencias
+
+  // Función helper para filtrar pedidos según el tipo
+  const filterOrdersByType = (ordersArray: Order[]): Order[] => {
+    if (orderType === 'salon') {
+      // Solo pedidos de salón (con TableId)
+      return ordersArray.filter((o: Order) => o.tableId != null);
+    } else if (orderType === 'delivery') {
+      // Solo pedidos de delivery (sin TableId)
+      return ordersArray.filter((o: Order) => o.tableId == null);
+    }
+    // Todos los pedidos
+    return ordersArray;
+  };
 
   const loadData = async () => {
     try {
@@ -220,7 +276,10 @@ export default function ActiveOrdersPage() {
       const ordersArray = Array.isArray(ordersResponse)
         ? ordersResponse
         : (ordersResponse as any)?.data || [];
-      setOrders(ordersArray);
+      
+      // Filtrar según el tipo de pedido
+      const filteredOrders = filterOrdersByType(ordersArray);
+      setOrders(filteredOrders);
       setDeliveryPersons(Array.isArray(deliveryData) ? deliveryData : []);
     } catch (error) {
       showToast('Error al cargar pedidos activos', 'error');
@@ -324,7 +383,11 @@ export default function ActiveOrdersPage() {
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">📋 Pedidos Activos</h1>
+              <h1 className="text-xl font-bold text-gray-800">
+                {orderType === 'salon' ? '🍽️ Pedidos Activos - Salón' : 
+                 orderType === 'delivery' ? '🚚 Pedidos Activos - Delivery' : 
+                 '📋 Pedidos Activos'}
+              </h1>
               <p className="text-sm text-gray-500">
                 {safeOrders.length} pedido{safeOrders.length !== 1 ? 's' : ''} en proceso
               </p>
@@ -372,7 +435,11 @@ export default function ActiveOrdersPage() {
           <div className="bg-white rounded-xl shadow-md p-12 text-center">
             <CheckCircle size={64} className="mx-auto mb-4 text-green-400" />
             <h2 className="text-xl font-bold text-gray-800 mb-2">¡Todo al día!</h2>
-            <p className="text-gray-500">No hay pedidos activos en este momento</p>
+            <p className="text-gray-500">
+              {orderType === 'salon' ? 'No hay pedidos activos de salón en este momento' : 
+               orderType === 'delivery' ? 'No hay pedidos activos de delivery en este momento' : 
+               'No hay pedidos activos en este momento'}
+            </p>
           </div>
         ) : viewMode === 'cards' ? (
           /* Cards View */

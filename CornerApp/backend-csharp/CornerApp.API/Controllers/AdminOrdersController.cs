@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CornerApp.API.Data;
@@ -122,6 +122,7 @@ public class AdminOrdersController : ControllerBase
         var query = _context.Orders
             .AsNoTracking()
             .Include(o => o.Items)
+            .Include(o => o.Table) // Incluir información de la mesa para mostrar número de mesa
             .Where(o => !o.IsArchived && 
                        o.Status != OrderConstants.STATUS_COMPLETED && 
                        o.Status != OrderConstants.STATUS_CANCELLED)
@@ -273,11 +274,11 @@ public class AdminOrdersController : ControllerBase
             // Validar que todos los productos existan en la base de datos
             var productIds = request.Items.Select(item => item.Id).Distinct().ToList();
             var existingProducts = await _context.Products
+                .Include(p => p.Category)
                 .Where(p => productIds.Contains(p.Id))
-                .Select(p => p.Id)
                 .ToListAsync();
             
-            var missingProductIds = productIds.Except(existingProducts).ToList();
+            var missingProductIds = productIds.Except(existingProducts.Select(p => p.Id)).ToList();
             if (missingProductIds.Any())
             {
                 _logger.LogWarning("Intento de crear pedido con productos inexistentes: {ProductIds}", string.Join(", ", missingProductIds));
@@ -460,14 +461,22 @@ public class AdminOrdersController : ControllerBase
                 customerLatitude, customerLongitude, null, null);
 
             // Crear los items primero
-            var orderItems = request.Items.Select(item => new OrderItem
+            var orderItems = request.Items.Select(item => 
             {
-                ProductId = item.Id,
-                ProductName = (item.Name ?? "Producto sin nombre").Length > 200 
-                    ? (item.Name ?? "Producto sin nombre").Substring(0, 200) 
-                    : (item.Name ?? "Producto sin nombre"),
-                UnitPrice = item.Price >= 0 ? item.Price : 0,
-                Quantity = item.Quantity > 0 ? item.Quantity : 1
+                // Buscar el producto para obtener su categoría
+                var product = existingProducts.FirstOrDefault(p => p.Id == item.Id);
+                
+                return new OrderItem
+                {
+                    ProductId = item.Id,
+                    ProductName = (item.Name ?? "Producto sin nombre").Length > 200 
+                        ? (item.Name ?? "Producto sin nombre").Substring(0, 200) 
+                        : (item.Name ?? "Producto sin nombre"),
+                    CategoryId = product?.CategoryId,
+                    CategoryName = product?.Category?.Name,
+                    UnitPrice = item.Price >= 0 ? item.Price : 0,
+                    Quantity = item.Quantity > 0 ? item.Quantity : 1
+                };
             }).ToList();
 
             var order = new Order

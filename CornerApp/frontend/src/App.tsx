@@ -19,6 +19,7 @@ import ActiveOrdersPage from './pages/ActiveOrders';
 import KitchenPage from './pages/Kitchen';
 import PaymentVerificationPage from './pages/PaymentVerification';
 import TablesPage from './pages/Tables';
+import TablesViewPage from './pages/TablesView';
 import AdminUsersPage from './pages/AdminUsers';
 
 export default function App() {
@@ -35,8 +36,11 @@ export default function App() {
       >
         <Route path="/admin" element={<Dashboard />} />
         <Route path="/admin/active-orders" element={<ActiveOrdersPage />} />
+        <Route path="/admin/active-orders/salon" element={<ActiveOrdersPage />} />
+        <Route path="/admin/active-orders/delivery" element={<ActiveOrdersPage />} />
         <Route path="/admin/payments" element={<PaymentVerificationPage />} />
         <Route path="/admin/kitchen" element={<KitchenPage />} />
+        <Route path="/admin/mesas-ver" element={<TablesViewPage />} />
         <Route path="/admin/tables" element={<TablesPage />} />
         <Route path="/admin/orders" element={<OrdersPage />} />
         <Route path="/admin/products" element={<ProductsPage />} />

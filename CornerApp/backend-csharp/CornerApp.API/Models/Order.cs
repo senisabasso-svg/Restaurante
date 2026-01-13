@@ -16,8 +16,7 @@ public class Order
     
     // Relación con Table (opcional - para pedidos en mesa)
     public int? TableId { get; set; }
-    [System.Text.Json.Serialization.JsonIgnore]
-    public Table? Table { get; set; }
+    public Table? Table { get; set; } // Incluido en JSON para mostrar número de mesa en frontend
     
     // Datos del cliente (para pedidos sin registro o como respaldo)
     public string CustomerName { get; set; } = string.Empty;
@@ -64,9 +63,12 @@ public class Order
 
 public class OrderItem
 {
+    public int Id { get; set; } // ID del item (primary key)
     public int OrderId { get; set; } // Para EF Core
     public int ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
+    public int? CategoryId { get; set; } // ID de la categoría del producto
+    public string? CategoryName { get; set; } // Nombre de la categoría del producto (para facilitar filtrado)
     public decimal UnitPrice { get; set; }
     public int Quantity { get; set; }
     public decimal Subtotal => UnitPrice * Quantity;

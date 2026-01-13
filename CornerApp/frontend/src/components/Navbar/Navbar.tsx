@@ -21,7 +21,10 @@ import {
   CheckCircle,
   Mail,
   Table as TableIcon,
-  Shield
+  Shield,
+  MoreHorizontal,
+  UtensilsCrossed,
+  ShoppingBag
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../api/client';
@@ -34,14 +37,28 @@ interface NavItem {
   subItems?: { path: string; label: string; icon: React.ElementType }[];
 }
 
+// Configuración: Cambiar a false para ocultar "Activos" y mostrar solo "Activos Salón" y "Activos Delivery"
+const SHOW_GENERAL_ACTIVE_ORDERS = true;
+
 const navItems: NavItem[] = [
-  { path: '/admin/active-orders', label: 'Activos', icon: ClipboardList },
+  // Enlace general de Activos (se puede ocultar en el futuro)
+  ...(SHOW_GENERAL_ACTIVE_ORDERS ? [{ path: '/admin/active-orders', label: 'Activos', icon: ClipboardList }] : []),
+  { path: '/admin/active-orders/salon', label: 'Activos Salón', icon: UtensilsCrossed },
+  { path: '/admin/active-orders/delivery', label: 'Activos Delivery', icon: ShoppingBag },
   { path: '/admin/payments', label: 'Pagos', icon: CheckCircle },
   { path: '/admin/kitchen', label: 'Cocina', icon: ChefHat },
-  { path: '/admin/delivery-persons', label: 'Repartidores', icon: Truck },
+  { path: '/admin/mesas-ver', label: 'Mesas', icon: TableIcon },
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/admin/orders', label: 'Historial', icon: History },
-  { path: '/admin/reports', label: 'Reportes', icon: BarChart3 },
+  {
+    path: '/admin/mas',
+    label: 'Mas',
+    icon: MoreHorizontal,
+    subItems: [
+      { path: '/admin/delivery-persons', label: 'Repartidores', icon: Truck },
+      { path: '/admin/reports', label: 'Reportes', icon: BarChart3 },
+      { path: '/admin/orders', label: 'Historial', icon: History },
+    ]
+  },
   {
     path: '/admin/settings',
     label: 'Config',
@@ -112,9 +129,13 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, []);
 
-  const isActive = (path: string) => {
+  const isActive = (path: string, subItems?: { path: string; label: string; icon: React.ElementType }[]) => {
     if (path === '/admin') {
       return location.pathname === '/admin';
+    }
+    // Si tiene subItems, verificar si alguna subruta está activa
+    if (subItems && subItems.length > 0) {
+      return subItems.some(subItem => location.pathname === subItem.path || location.pathname.startsWith(subItem.path));
     }
     return location.pathname.startsWith(path);
   };
@@ -139,7 +160,15 @@ export default function Navbar() {
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-1" ref={dropdownRef}>
-            {navItems.map((item) => {
+            {navItems
+              .filter((item) => {
+                // Filtrar enlace de Mesas si el usuario no es Admin o Employee
+                if (item.path === '/admin/mesas-ver') {
+                  return user && (user.role === 'Admin' || user.role === 'Employee');
+                }
+                return true;
+              })
+              .map((item) => {
               const Icon = item.icon;
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const isDropdownOpen = openDropdown === item.path;
@@ -149,7 +178,7 @@ export default function Navbar() {
                   <div key={item.path} className="relative">
                     <button
                       onClick={() => toggleDropdown(item.path)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isActive(item.path)
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isActive(item.path, item.subItems)
                         ? 'bg-primary-500 text-white shadow-md'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                         }`}
@@ -256,7 +285,15 @@ export default function Navbar() {
       {/* Mobile Navigation */}
       <div className="md:hidden border-t border-gray-200">
         <div className="flex overflow-x-auto py-2 px-2 gap-1">
-          {navItems.map((item) => {
+          {navItems
+            .filter((item) => {
+              // Filtrar enlace de Mesas si el usuario no es Admin o Employee
+              if (item.path === '/admin/mesas-ver') {
+                return user && (user.role === 'Admin' || user.role === 'Employee');
+              }
+              return true;
+            })
+            .map((item) => {
             const Icon = item.icon;
             const hasSubItems = item.subItems && item.subItems.length > 0;
 
@@ -265,7 +302,7 @@ export default function Navbar() {
                 <div key={item.path} className="relative">
                   <button
                     onClick={() => toggleDropdown(item.path)}
-                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${isActive(item.path)
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${isActive(item.path, item.subItems)
                       ? 'bg-primary-500 text-white'
                       : 'text-gray-600 hover:bg-gray-100'
                       }`}

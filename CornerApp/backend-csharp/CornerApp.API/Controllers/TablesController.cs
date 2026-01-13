@@ -318,14 +318,14 @@ public class TablesController : ControllerBase
                 return BadRequest(new { error = "El pedido debe contener al menos un item" });
             }
 
-            // Validar productos
+            // Validar productos y obtener información de categorías
             var productIds = orderRequest.Items.Select(item => item.Id).Distinct().ToList();
             var existingProducts = await _context.Products
+                .Include(p => p.Category)
                 .Where(p => productIds.Contains(p.Id))
-                .Select(p => p.Id)
                 .ToListAsync();
             
-            var missingProductIds = productIds.Except(existingProducts).ToList();
+            var missingProductIds = productIds.Except(existingProducts.Select(p => p.Id)).ToList();
             if (missingProductIds.Any())
             {
                 return BadRequest(new { 
@@ -358,12 +358,17 @@ public class TablesController : ControllerBase
             // Crear items del pedido
             var orderItems = orderRequest.Items.Select(item => 
             {
+                // Buscar el producto para obtener su categoría
+                var product = existingProducts.FirstOrDefault(p => p.Id == item.Id);
+                
                 var orderItem = new OrderItem
                 {
                     ProductId = item.Id,
                     ProductName = (item.Name ?? "Producto sin nombre").Length > 200 
                         ? (item.Name ?? "Producto sin nombre").Substring(0, 200) 
                         : (item.Name ?? "Producto sin nombre"),
+                    CategoryId = product?.CategoryId,
+                    CategoryName = product?.Category?.Name,
                     UnitPrice = item.Price >= 0 ? item.Price : 0,
                     Quantity = item.Quantity > 0 ? item.Quantity : 1
                 };
@@ -429,6 +434,76 @@ public class TablesController : ControllerBase
             _logger.LogError(ex, "Error al crear pedido desde mesa {TableId}", id);
             return StatusCode(500, new { 
                 error = "Error al crear el pedido", 
+                details = ex.Message 
+            });
+        }
+    }
+
+    /// <summary>
+    /// Elimina un item de un pedido de mesa
+    /// </summary>
+    [HttpDelete("orders/{orderId}/items/{itemId}")]
+    [Authorize(Roles = "Admin,Employee")]
+    public async Task<ActionResult> DeleteOrderItem(int orderId, int itemId)
+    {
+        try
+        {
+            var order = await _context.Orders
+                .Include(o => o.Items)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return NotFound(new { error = "Pedido no encontrado" });
+            }
+
+            // Verificar que el pedido pertenece a una mesa
+            if (!order.TableId.HasValue)
+            {
+                return BadRequest(new { error = "Este pedido no está asociado a una mesa" });
+            }
+
+            // Verificar que el pedido no esté completado o cancelado
+            if (order.Status == OrderConstants.STATUS_COMPLETED || order.Status == OrderConstants.STATUS_CANCELLED)
+            {
+                return BadRequest(new { error = "No se pueden eliminar items de pedidos completados o cancelados" });
+            }
+
+            var item = order.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item == null)
+            {
+                return NotFound(new { error = "Item no encontrado en el pedido" });
+            }
+
+            // Eliminar el item
+            order.Items.Remove(item);
+
+            // Recalcular el total del pedido
+            order.Total = order.Items.Sum(i => i.Subtotal);
+            order.UpdatedAt = DateTime.UtcNow;
+
+            // Si no quedan items, cancelar el pedido
+            if (order.Items.Count == 0)
+            {
+                order.Status = OrderConstants.STATUS_CANCELLED;
+                _logger.LogInformation("Pedido {OrderId} cancelado automáticamente al eliminar todos sus items", orderId);
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Item {ItemId} eliminado del pedido {OrderId}", itemId, orderId);
+
+            return Ok(new { 
+                success = true,
+                message = "Item eliminado correctamente",
+                order = order
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al eliminar item {ItemId} del pedido {OrderId}", itemId, orderId);
+            return StatusCode(500, new { 
+                error = "Error al eliminar el item", 
                 details = ex.Message 
             });
         }

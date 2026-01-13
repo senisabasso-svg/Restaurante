@@ -185,14 +185,14 @@ public class ApplicationDbContext : DbContext
             entity.OwnsMany(e => e.Items, item =>
             {
                 item.WithOwner().HasForeignKey("OrderId");
-                var idProperty = item.Property<int>("Id");
-                idProperty.ValueGeneratedOnAdd();
-                // UseIdentityColumn funciona automáticamente con SQL Server
-                // Si se usa otro proveedor, esto será ignorado o causará un error en tiempo de migración
-                idProperty.UseIdentityColumn();
-                item.HasKey("Id");
+                // Ahora que Id es una propiedad explícita, usar la propiedad directamente
+                item.Property(i => i.Id).ValueGeneratedOnAdd();
+                item.Property(i => i.Id).UseIdentityColumn();
+                item.HasKey(i => i.Id);
                 item.Property(i => i.ProductId).IsRequired();
                 item.Property(i => i.ProductName).IsRequired().HasMaxLength(200);
+                item.Property(i => i.CategoryId);
+                item.Property(i => i.CategoryName).HasMaxLength(50); // Nombre de categoría
                 item.Property(i => i.UnitPrice).HasColumnType("decimal(18,2)").IsRequired();
                 item.Property(i => i.Quantity).IsRequired();
                 item.Property(i => i.SubProductsJson).HasMaxLength(2000); // JSON string para subproductos

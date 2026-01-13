@@ -10,6 +10,7 @@ export interface Order {
   deliveryPersonId?: number;
   deliveryPerson?: DeliveryPerson;
   tableId?: number; // ID de la mesa asociada al pedido
+  table?: Table; // Información completa de la mesa (incluye número)
   comments?: string;
   isArchived: boolean;
   createdAt: string;
@@ -33,6 +34,8 @@ export interface OrderItem {
   orderId: number;
   productId: number;
   productName: string;
+  categoryId?: number; // ID de la categoría del producto
+  categoryName?: string; // Nombre de la categoría del producto (para facilitar filtrado)
   quantity: number;
   unitPrice: number;
   subtotal: number;

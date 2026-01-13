@@ -208,11 +208,11 @@ public class OrdersController : ControllerBase
             // Validar que todos los productos existan en la base de datos
             var productIds = request.Items.Select(item => item.Id).Distinct().ToList();
             var existingProducts = await _context.Products
+                .Include(p => p.Category)
                 .Where(p => productIds.Contains(p.Id))
-                .Select(p => p.Id)
                 .ToListAsync();
             
-            var missingProductIds = productIds.Except(existingProducts).ToList();
+            var missingProductIds = productIds.Except(existingProducts.Select(p => p.Id)).ToList();
             if (missingProductIds.Any())
             {
                 _logger.LogWarning("Intento de crear pedido con productos inexistentes: {ProductIds}", string.Join(", ", missingProductIds));
@@ -642,12 +642,20 @@ public class OrdersController : ControllerBase
                     ? (FileValidationHelper.ValidateReceiptImage(request.ReceiptImage, AppConstants.MAX_PRODUCT_IMAGE_SIZE_BYTES).IsValid ? request.ReceiptImage : null)
                     : null,
                 Comments = request.Comments, // Guardar comentarios si existen
-                Items = request.Items.Select(item => new OrderItem
+                Items = request.Items.Select(item => 
                 {
-                    ProductId = item.Id,
-                    ProductName = item.Name ?? "Producto sin nombre",
-                    UnitPrice = item.Price >= 0 ? item.Price : 0, // Asegurar precio no negativo
-                    Quantity = item.Quantity > 0 ? item.Quantity : 1 // Asegurar cantidad mínima de 1
+                    // Buscar el producto para obtener su categoría
+                    var product = existingProducts.FirstOrDefault(p => p.Id == item.Id);
+                    
+                    return new OrderItem
+                    {
+                        ProductId = item.Id,
+                        ProductName = item.Name ?? "Producto sin nombre",
+                        CategoryId = product?.CategoryId,
+                        CategoryName = product?.Category?.Name,
+                        UnitPrice = item.Price >= 0 ? item.Price : 0, // Asegurar precio no negativo
+                        Quantity = item.Quantity > 0 ? item.Quantity : 1 // Asegurar cantidad mínima de 1
+                    };
                 }).ToList()
             };
 
