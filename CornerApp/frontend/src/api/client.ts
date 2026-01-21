@@ -9,6 +9,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: unknown;
   headers?: Record<string, string>;
+  skipAuth?: boolean;
 }
 
 class ApiClient {
@@ -19,10 +20,10 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const { method = 'GET', body, headers = {} } = options;
+    const { method = 'GET', body, headers = {}, skipAuth = false } = options;
 
-    // Obtener token del localStorage (admin o repartidor)
-    const token = localStorage.getItem('admin_token') || localStorage.getItem('delivery_token');
+    // Obtener token del localStorage (admin o repartidor) solo si no se omite la autenticación
+    const token = skipAuth ? null : (localStorage.getItem('admin_token') || localStorage.getItem('delivery_token'));
 
     const config: RequestInit = {
       method,
@@ -422,6 +423,23 @@ class ApiClient {
 
   async createOrderFromTable(tableId: number, data: { items: Array<{ id: number; name: string; price: number; quantity: number; subProducts?: Array<{ id: number; name: string; price: number }> }>; paymentMethod?: string; comments?: string }) {
     return this.request<{ id: number; message: string; order: Order; table: Table }>(`/api/tables/${tableId}/create-order`, { method: 'POST', body: data });
+  }
+
+  // Public endpoints for waiters (no authentication required)
+  async getTablesForWaiter() {
+    return this.request<Table[]>('/api/tables/waiter', { skipAuth: true });
+  }
+
+  async getProductsForWaiter() {
+    return this.request<Product[]>('/admin/api/products/waiter', { skipAuth: true });
+  }
+
+  async getCategoriesForWaiter() {
+    return this.request<Category[]>('/admin/api/categories/waiter', { skipAuth: true });
+  }
+
+  async createOrderFromTableForWaiter(tableId: number, data: { items: Array<{ id: number; name: string; price: number; quantity: number; subProducts?: Array<{ id: number; name: string; price: number }> }>; paymentMethod?: string; comments?: string }) {
+    return this.request<{ id: number; message: string; order: Order; table: Table }>(`/api/tables/waiter/${tableId}/create-order`, { method: 'POST', body: data, skipAuth: true });
   }
 
   // Spaces

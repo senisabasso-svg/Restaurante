@@ -23,11 +23,13 @@ import TablesViewPage from './pages/TablesView';
 import AdminUsersPage from './pages/AdminUsers';
 import DeliveryOrdersPage from './pages/DeliveryOrders';
 import DeliveryPersonsManagementPage from './pages/DeliveryPersonsManagement';
+import WaiterPage from './pages/WaiterPage';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/mozo" element={<WaiterPage />} />
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route
         element={

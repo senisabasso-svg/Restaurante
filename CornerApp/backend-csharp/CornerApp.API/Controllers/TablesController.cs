@@ -771,6 +771,216 @@ public class TablesController : ControllerBase
     }
 
     /// <summary>
+    /// Endpoint público para mozos: Obtiene todas las mesas (sin autenticación)
+    /// </summary>
+    [HttpGet("waiter")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetTablesForWaiter()
+    {
+        try
+        {
+            var tables = await _context.Tables
+                .Where(t => t.IsActive)
+                .OrderBy(t => t.Number)
+                .Select(t => new
+                {
+                    id = t.Id,
+                    number = t.Number,
+                    capacity = t.Capacity,
+                    status = t.Status,
+                    location = t.Location,
+                    spaceId = t.SpaceId,
+                    positionX = t.PositionX,
+                    positionY = t.PositionY,
+                    orderPlacedAt = t.OrderPlacedAt
+                })
+                .ToListAsync();
+
+            return Ok(tables);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener mesas para mozo");
+            return StatusCode(500, new { error = "Error al obtener mesas", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Endpoint público para mozos: Crea un pedido desde una mesa (sin autenticación)
+    /// </summary>
+    [HttpPost("waiter/{id}/create-order")]
+    [AllowAnonymous]
+    public async Task<ActionResult> CreateOrderFromTableForWaiter(int id, [FromBody] CreateOrderFromTableRequest request)
+    {
+        try
+        {
+            // Verificar que la caja esté abierta
+            var openCashRegister = await _context.CashRegisters
+                .Where(c => c.IsOpen)
+                .FirstOrDefaultAsync();
+
+            if (openCashRegister == null)
+            {
+                return BadRequest(new { error = "Debe abrir la caja antes de crear pedidos desde mesas" });
+            }
+
+            // Verificar que la mesa existe
+            var table = await _context.Tables.FindAsync(id);
+            if (table == null)
+            {
+                return NotFound(new { error = "Mesa no encontrada" });
+            }
+
+            if (!table.IsActive)
+            {
+                return BadRequest(new { error = "La mesa no está activa" });
+            }
+
+            // Crear el request para AdminOrdersController
+            var orderRequest = new CreateOrderRequest
+            {
+                CustomerName = $"Mesa {table.Number}",
+                CustomerPhone = null,
+                CustomerEmail = null,
+                CustomerAddress = null,
+                PaymentMethod = request.PaymentMethod ?? PaymentConstants.METHOD_CASH,
+                Items = request.Items,
+                Comments = request.Comments,
+                TableId = id
+            };
+
+            if (orderRequest.Items == null || !orderRequest.Items.Any())
+            {
+                return BadRequest(new { error = "El pedido debe contener al menos un item" });
+            }
+
+            // Validar productos y obtener información de categorías
+            var productIds = orderRequest.Items.Select(item => item.Id).Distinct().ToList();
+            var existingProducts = await _context.Products
+                .Include(p => p.Category)
+                .Where(p => productIds.Contains(p.Id))
+                .ToListAsync();
+            
+            var missingProductIds = productIds.Except(existingProducts.Select(p => p.Id)).ToList();
+            if (missingProductIds.Any())
+            {
+                return BadRequest(new { 
+                    error = $"Los siguientes productos no existen: {string.Join(", ", missingProductIds)}" 
+                });
+            }
+
+            // Calcular total
+            var total = orderRequest.Items.Sum(item => 
+            {
+                var price = item.Price >= 0 ? item.Price : 0;
+                return price * item.Quantity;
+            });
+
+            // Obtener método de pago
+            var paymentMethodName = orderRequest.PaymentMethod ?? PaymentConstants.METHOD_CASH;
+            var paymentMethod = await _context.PaymentMethods
+                .FirstOrDefaultAsync(pm => pm.Name.ToLower() == paymentMethodName.ToLower() && pm.IsActive);
+            
+            if (paymentMethod == null)
+            {
+                paymentMethodName = PaymentConstants.METHOD_CASH;
+            }
+            else
+            {
+                paymentMethodName = paymentMethod.Name ?? PaymentConstants.METHOD_CASH;
+            }
+
+            // Crear items del pedido
+            var orderItems = orderRequest.Items.Select(item =>
+            {
+                var product = existingProducts.FirstOrDefault(p => p.Id == item.Id);
+                var unitPrice = item.Price >= 0 ? item.Price : (product?.Price ?? 0);
+                var orderItem = new OrderItem
+                {
+                    ProductId = item.Id,
+                    ProductName = item.Name ?? product?.Name ?? "Producto",
+                    Quantity = item.Quantity,
+                    UnitPrice = unitPrice
+                    // Subtotal se calcula automáticamente como UnitPrice * Quantity
+                };
+
+                if (item.SubProducts != null && item.SubProducts.Any())
+                {
+                    orderItem.SubProducts = item.SubProducts.Select(sp => new Models.OrderItemSubProduct
+                    {
+                        Id = sp.Id,
+                        Name = sp.Name ?? string.Empty,
+                        Price = sp.Price
+                    }).ToList();
+                }
+                
+                return orderItem;
+            }).ToList();
+
+            // Crear el pedido
+            var order = new Order
+            {
+                CustomerName = orderRequest.CustomerName,
+                CustomerPhone = string.Empty,
+                CustomerEmail = string.Empty,
+                CustomerAddress = string.Empty,
+                Total = total,
+                PaymentMethod = paymentMethodName,
+                Status = OrderConstants.STATUS_PENDING,
+                EstimatedDeliveryMinutes = 30, // Tiempo estimado por defecto para mesas
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+                Comments = orderRequest.Comments,
+                TableId = id,
+                Items = orderItems
+            };
+
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
+
+            // Actualizar estado de la mesa
+            await SyncTableStatusWithOrders(table);
+            
+            if (table.Status == "Available")
+            {
+                table.Status = "Occupied";
+            }
+            
+            table.OrderPlacedAt = DateTime.UtcNow;
+            table.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            // Notificar via SignalR
+            try
+            {
+                await _orderNotificationService.NotifyOrderCreated(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "No se pudo enviar notificación SignalR para pedido {OrderId}", order.Id);
+            }
+
+            _logger.LogInformation("Pedido {OrderId} creado desde mesa {TableId} - {TableNumber} (por mozo)", 
+                order.Id, table.Id, table.Number);
+
+            return Ok(new { 
+                id = order.Id, 
+                message = "Pedido creado exitosamente",
+                order = order,
+                table = table
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al crear pedido desde mesa {TableId} (por mozo)", id);
+            return StatusCode(500, new { 
+                error = "Error al crear el pedido", 
+                details = ex.Message 
+            });
+        }
+    }
+
+    /// <summary>
     /// Elimina un item de un pedido de mesa
     /// </summary>
     [HttpDelete("orders/{orderId}/items/{itemId}")]

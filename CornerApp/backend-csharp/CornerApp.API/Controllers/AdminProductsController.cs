@@ -32,6 +32,36 @@ public class AdminProductsController : ControllerBase
     }
 
     /// <summary>
+    /// Endpoint público para mozos: Obtiene todos los productos activos (sin autenticación)
+    /// </summary>
+    [HttpGet("waiter")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetProductsForWaiter()
+    {
+        var products = await _context.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .Where(p => p.IsAvailable)
+            .OrderBy(p => p.DisplayOrder)
+            .ThenBy(p => p.CreatedAt)
+            .Select(p => new
+            {
+                id = p.Id,
+                name = p.Name,
+                description = p.Description,
+                price = p.Price,
+                categoryId = p.CategoryId,
+                categoryName = p.Category != null ? p.Category.Name : null,
+                image = p.Image,
+                isAvailable = p.IsAvailable,
+                displayOrder = p.DisplayOrder
+            })
+            .ToListAsync();
+
+        return Ok(products);
+    }
+
+    /// <summary>
     /// Obtiene todos los productos
     /// </summary>
     [HttpGet]

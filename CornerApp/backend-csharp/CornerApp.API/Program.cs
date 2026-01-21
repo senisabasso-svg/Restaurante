@@ -354,7 +354,11 @@ if (!builder.Environment.IsDevelopment() && (jwtKey == null || jwtKey.Length < 3
     throw new InvalidOperationException("JWT Secret Key debe tener al menos 32 caracteres en producción.");
 }
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -366,6 +370,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+        // Permitir peticiones sin token (para endpoints AllowAnonymous)
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                // Si no hay token, no es un error para endpoints AllowAnonymous
+                var endpoint = context.HttpContext.GetEndpoint();
+                if (endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute>() != null)
+                {
+                    context.NoResult();
+                    return Task.CompletedTask;
+                }
+                return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                // Si el endpoint tiene AllowAnonymous, no desafiar la autenticación
+                var endpoint = context.HttpContext.GetEndpoint();
+                if (endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute>() != null)
+                {
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 

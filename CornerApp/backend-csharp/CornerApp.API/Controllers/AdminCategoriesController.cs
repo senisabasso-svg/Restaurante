@@ -32,6 +32,31 @@ public class AdminCategoriesController : ControllerBase
     }
 
     /// <summary>
+    /// Endpoint público para mozos: Obtiene todas las categorías activas (sin autenticación)
+    /// </summary>
+    [HttpGet("waiter")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetCategoriesForWaiter()
+    {
+        var categories = await _context.Categories
+            .AsNoTracking()
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.DisplayOrder)
+            .Select(c => new
+            {
+                id = c.Id,
+                name = c.Name,
+                description = c.Description,
+                icon = c.Icon,
+                displayOrder = c.DisplayOrder,
+                isActive = c.IsActive
+            })
+            .ToListAsync();
+
+        return Ok(categories);
+    }
+
+    /// <summary>
     /// Obtiene todas las categorías
     /// </summary>
     [HttpGet]
