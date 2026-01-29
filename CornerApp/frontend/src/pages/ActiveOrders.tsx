@@ -56,8 +56,11 @@ export default function ActiveOrdersPage() {
 
   const [searchParams] = useSearchParams();
 
-  // Detectar si el usuario es repartidor (tiene delivery_token)
-  const isDeliveryPerson = !!localStorage.getItem('delivery_token');
+  // Detectar si el usuario es repartidor
+  // Solo es repartidor si tiene delivery_token PERO NO tiene admin_token (admin/employee)
+  const hasDeliveryToken = !!localStorage.getItem('delivery_token');
+  const hasAdminToken = !!localStorage.getItem('admin_token');
+  const isDeliveryPerson = hasDeliveryToken && !hasAdminToken;
 
   // Determinar el tipo de filtro según la ruta
   // Si es repartidor, solo puede ver delivery (nunca salon)
@@ -85,11 +88,14 @@ export default function ActiveOrdersPage() {
   const { playSound } = useNotificationSound();
 
   // SignalR handlers
-  const handleOrderCreated = useCallback((order: Order) => {
+  const handleOrderCreated = useCallback((order: any) => {
     console.log('🆕 ActiveOrders: Nuevo pedido recibido via SignalR:', order);
     console.log('🆕 ActiveOrders: Status del pedido:', order?.status);
     console.log('🆕 ActiveOrders: ID del pedido:', order?.id);
     console.log('🆕 ActiveOrders: CustomerName:', order?.customerName);
+    console.log('🆕 ActiveOrders: TableId (raw):', order?.tableId, order?.TableId);
+    console.log('🆕 ActiveOrders: Table (raw):', order?.table, order?.Table);
+    console.log('🆕 ActiveOrders: orderType actual:', orderType);
     console.log('🆕 ActiveOrders: ACTIVE_STATUSES:', ACTIVE_STATUSES);
 
     // Validar que el objeto order tenga los campos necesarios
@@ -102,27 +108,56 @@ export default function ActiveOrdersPage() {
     console.log('🆕 ActiveOrders: ¿Está en ACTIVE_STATUSES?', ACTIVE_STATUSES.includes(orderStatus));
 
     if (ACTIVE_STATUSES.includes(orderStatus)) {
-      // Asegurar que el objeto order tenga todos los campos necesarios
+      // Normalizar el objeto order, manejando tanto camelCase como PascalCase
       const normalizedOrder: Order = {
         ...order,
-        items: order.items || [],
-        isArchived: order.isArchived || false,
-        createdAt: order.createdAt || new Date().toISOString(),
-        updatedAt: order.updatedAt || new Date().toISOString(),
+        id: order.id || order.Id,
+        status: (order.status || order.Status) as OrderStatus,
+        customerName: order.customerName || order.CustomerName || '',
+        tableId: order.tableId ?? order.TableId ?? null, // Manejar ambos casos
+        table: order.table || order.Table || undefined,
+        items: order.items || order.Items || [],
+        isArchived: order.isArchived ?? order.IsArchived ?? false,
+        createdAt: order.createdAt || order.CreatedAt || new Date().toISOString(),
+        updatedAt: order.updatedAt || order.UpdatedAt || new Date().toISOString(),
       };
+
+      console.log('🆕 ActiveOrders: Pedido normalizado:', {
+        id: normalizedOrder.id,
+        status: normalizedOrder.status,
+        tableId: normalizedOrder.tableId,
+        tableNumber: normalizedOrder.table?.number,
+        orderType: orderType
+      });
 
       // Filtrar según el tipo de pedido
       // Si es repartidor, solo incluir pedidos asignados a él (sin tableId y con deliveryPersonId)
       let shouldInclude: boolean;
       if (isDeliveryPerson) {
         shouldInclude = normalizedOrder.tableId == null && normalizedOrder.deliveryPersonId != null;
+      } else if (orderType === 'all') {
+        // En "Activos" mostrar TODOS los pedidos (tanto de salón como de delivery)
+        shouldInclude = true;
+      } else if (orderType === 'salon') {
+        // Solo pedidos de salón (con tableId)
+        shouldInclude = normalizedOrder.tableId != null;
+      } else if (orderType === 'delivery') {
+        // Solo pedidos de delivery (sin tableId)
+        shouldInclude = normalizedOrder.tableId == null;
       } else {
-        shouldInclude = orderType === 'all' || 
-                       (orderType === 'salon' && normalizedOrder.tableId != null) ||
-                       (orderType === 'delivery' && normalizedOrder.tableId == null);
+        shouldInclude = false;
       }
 
+      console.log('🆕 ActiveOrders: ¿Debe incluirse?', shouldInclude, {
+        isDeliveryPerson,
+        orderType,
+        tableId: normalizedOrder.tableId,
+        isSalon: normalizedOrder.tableId != null,
+        isDelivery: normalizedOrder.tableId == null
+      });
+
       if (!shouldInclude) {
+        console.log('⚠️ ActiveOrders: Pedido filtrado, no corresponde al tipo actual');
         return; // No agregar este pedido si no corresponde al tipo actual
       }
 
@@ -168,7 +203,13 @@ export default function ActiveOrdersPage() {
 
   const loadData = useCallback(async () => {
     try {
-      console.log('📥 ActiveOrders: Iniciando carga de datos... orderType:', orderType, 'isDeliveryPerson:', isDeliveryPerson);
+      console.log('📥 ActiveOrders: Iniciando carga de datos...', {
+        orderType,
+        isDeliveryPerson,
+        hasDeliveryToken,
+        hasAdminToken,
+        pathname: location.pathname
+      });
       setLoading(true);
       
       // Si es repartidor, cargar solo sus pedidos asignados
@@ -262,7 +303,7 @@ export default function ActiveOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterOrdersByType, showToast, orderType, isDeliveryPerson]);
+  }, [filterOrdersByType, showToast, orderType, isDeliveryPerson, location.pathname]);
 
   const handleOrderUpdated = useCallback((order: Order) => {
     console.log('🔄 ActiveOrders: handleOrderUpdated llamado con:', {
@@ -384,11 +425,21 @@ export default function ActiveOrdersPage() {
     // Si no cambió de mesa, continuar con la lógica normal de actualización
     if (ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
       // Verificar si el pedido corresponde al tipo actual
-      const shouldInclude = isDeliveryPerson
-        ? (order.tableId == null && order.deliveryPersonId != null)
-        : (orderType === 'all' || 
-           (orderType === 'salon' && order.tableId != null) ||
-           (orderType === 'delivery' && order.tableId == null));
+      let shouldInclude: boolean;
+      if (isDeliveryPerson) {
+        shouldInclude = order.tableId == null && order.deliveryPersonId != null;
+      } else if (orderType === 'all') {
+        // En "Activos" mostrar TODOS los pedidos (tanto de salón como de delivery)
+        shouldInclude = true;
+      } else if (orderType === 'salon') {
+        // Solo pedidos de salón (con tableId)
+        shouldInclude = order.tableId != null;
+      } else if (orderType === 'delivery') {
+        // Solo pedidos de delivery (sin tableId)
+        shouldInclude = order.tableId == null;
+      } else {
+        shouldInclude = false;
+      }
       
       console.log('🔍 ActiveOrders: Verificando si incluir pedido:', {
         orderId: order.id,
@@ -453,11 +504,21 @@ export default function ActiveOrdersPage() {
         if (!order) return prev;
         
         // Verificar si el pedido actualizado corresponde al tipo actual
-        const shouldInclude = isDeliveryPerson
-          ? (order.tableId == null && order.deliveryPersonId != null)
-          : (orderType === 'all' || 
-             (orderType === 'salon' && order.tableId != null) ||
-             (orderType === 'delivery' && order.tableId == null));
+        let shouldInclude: boolean;
+        if (isDeliveryPerson) {
+          shouldInclude = order.tableId == null && order.deliveryPersonId != null;
+        } else if (orderType === 'all') {
+          // En "Activos" mostrar TODOS los pedidos (tanto de salón como de delivery)
+          shouldInclude = true;
+        } else if (orderType === 'salon') {
+          // Solo pedidos de salón (con tableId)
+          shouldInclude = order.tableId != null;
+        } else if (orderType === 'delivery') {
+          // Solo pedidos de delivery (sin tableId)
+          shouldInclude = order.tableId == null;
+        } else {
+          shouldInclude = false;
+        }
         
         if (shouldInclude) {
           return prev.map(o =>
@@ -509,11 +570,17 @@ export default function ActiveOrdersPage() {
               : (ordersResponse as any)?.data || [];
             
             // Filtrar según el tipo de pedido
-            const filteredOrders = orderType === 'salon' 
-              ? ordersArray.filter((o: Order) => o.tableId != null)
-              : orderType === 'delivery'
-              ? ordersArray.filter((o: Order) => o.tableId == null)
-              : ordersArray;
+            let filteredOrders: Order[];
+            if (orderType === 'salon') {
+              // Solo pedidos de salón (con tableId)
+              filteredOrders = ordersArray.filter((o: Order) => o.tableId != null);
+            } else if (orderType === 'delivery') {
+              // Solo pedidos de delivery (sin tableId)
+              filteredOrders = ordersArray.filter((o: Order) => o.tableId == null);
+            } else {
+              // orderType === 'all' - Mostrar TODOS los pedidos (tanto de salón como de delivery)
+              filteredOrders = ordersArray;
+            }
             
             setOrders(prev => {
               const currentIds = new Set(prev.map(o => o.id));
@@ -648,10 +715,7 @@ export default function ActiveOrdersPage() {
           <div className="flex items-center gap-3">
             <div>
               <h1 className="text-xl font-bold text-gray-800">
-                {isDeliveryPerson ? '🚚 Mis Pedidos Asignados' :
-                 orderType === 'salon' ? '🍽️ Pedidos Activos - Salón' : 
-                 orderType === 'delivery' ? '🚚 Pedidos Activos - Delivery' : 
-                 '📋 Pedidos Activos'}
+                {isDeliveryPerson ? '🚚 Mis Pedidos Asignados' : '📋 Pedidos Activos'}
               </h1>
               <p className="text-sm text-gray-500">
                 {safeOrders.length} pedido{safeOrders.length !== 1 ? 's' : ''} en proceso
@@ -701,10 +765,9 @@ export default function ActiveOrdersPage() {
             <CheckCircle size={64} className="mx-auto mb-4 text-green-400" />
             <h2 className="text-xl font-bold text-gray-800 mb-2">¡Todo al día!</h2>
             <p className="text-gray-500">
-              {isDeliveryPerson ? 'No tienes pedidos asignados en este momento' :
-               orderType === 'salon' ? 'No hay pedidos activos de salón en este momento' : 
-               orderType === 'delivery' ? 'No hay pedidos activos de delivery en este momento' : 
-               'No hay pedidos activos en este momento'}
+              {isDeliveryPerson 
+                ? 'No tienes pedidos asignados en este momento' 
+                : 'No hay pedidos activos en este momento'}
             </p>
           </div>
         ) : viewMode === 'cards' ? (
@@ -1103,7 +1166,7 @@ function OrderCard({
       } `}>
       {/* Header */}
       <div className="p-4 border-b border-gray-100">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-2">
           <span className="text-lg font-bold text-primary-600">#{order.id}</span>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.bgColor} ${status.color} `}>
@@ -1114,6 +1177,22 @@ function OrderCard({
               {elapsed.isUrgent && '🔥'} {elapsed.text}
             </span>
           </div>
+        </div>
+        {/* Información de origen del pedido */}
+        <div className="flex items-center gap-2">
+          {order.tableId && order.table ? (
+            <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+              🪑 Mesa {order.table.number}
+            </span>
+          ) : order.deliveryPersonId && order.deliveryPerson ? (
+            <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
+              🚚 Repartidor: {order.deliveryPerson.name}
+            </span>
+          ) : order.deliveryPersonId ? (
+            <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
+              🚚 Delivery
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -1156,11 +1235,6 @@ function OrderCard({
               <span className="flex items-center gap-1">
                 <Phone size={12} />
                 {order.customerPhone}
-              </span>
-            )}
-            {order.tableId && order.table && (
-              <span className="flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                🪑 Mesa {order.table.number}
               </span>
             )}
           </div>

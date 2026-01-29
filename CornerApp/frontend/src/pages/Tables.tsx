@@ -619,6 +619,13 @@ export default function TablesPage() {
       // Procesar el pago de todos los pedidos de la mesa
       for (const order of tableOrders) {
         await api.processTablePayment(order.id, selectedPaymentMethod);
+        // Archivar el pedido después de procesar el pago para que no siga apareciendo en la mesa
+        try {
+          await api.archiveOrder(order.id);
+        } catch (error: any) {
+          console.warn(`No se pudo archivar el pedido ${order.id}:`, error);
+          // Continuar aunque falle el archivado
+        }
       }
       
       // Actualizar el estado de la mesa a Available

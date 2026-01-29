@@ -23,8 +23,6 @@ import {
   Table as TableIcon,
   Shield,
   MoreHorizontal,
-  UtensilsCrossed,
-  ShoppingBag
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../api/client';
@@ -37,14 +35,9 @@ interface NavItem {
   subItems?: { path: string; label: string; icon: React.ElementType }[];
 }
 
-// Configuración: Cambiar a false para ocultar "Activos" y mostrar solo "Activos Salón" y "Activos Delivery"
-const SHOW_GENERAL_ACTIVE_ORDERS = true;
-
 const navItems: NavItem[] = [
-  // Enlace general de Activos (se puede ocultar en el futuro)
-  ...(SHOW_GENERAL_ACTIVE_ORDERS ? [{ path: '/admin/active-orders', label: 'Activos', icon: ClipboardList }] : []),
-  { path: '/admin/active-orders/salon', label: 'Activos Salón', icon: UtensilsCrossed },
-  { path: '/admin/active-orders/delivery', label: 'Activos Delivery', icon: ShoppingBag },
+  // Activos: muestra todos los pedidos (tanto de salón como de delivery)
+  { path: '/admin/active-orders', label: 'Activos', icon: ClipboardList },
   { path: '/admin/payments', label: 'Pagos', icon: CheckCircle },
   { path: '/admin/kitchen', label: 'Cocina', icon: ChefHat },
   { path: '/admin/mesas-ver', label: 'Mesas', icon: TableIcon },

@@ -750,13 +750,43 @@ public class TablesController : ControllerBase
             table.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            // Recargar el pedido con la información de la mesa para la notificación
+            var orderWithTable = await _context.Orders
+                .AsNoTracking()
+                .Include(o => o.Table)
+                .Include(o => o.Items)
+                .FirstOrDefaultAsync(o => o.Id == order.Id);
+
+            // Notificar via SignalR
+            try
+            {
+                if (orderWithTable != null)
+                {
+                    _logger.LogInformation("Enviando notificación SignalR para pedido {OrderId} con TableId={TableId}, TableNumber={TableNumber}", 
+                        orderWithTable.Id, orderWithTable.TableId, orderWithTable.Table?.Number);
+                    await _orderNotificationService.NotifyOrderCreated(orderWithTable);
+                }
+                else
+                {
+                    _logger.LogWarning("No se pudo recargar pedido {OrderId} con información de mesa, enviando sin Table", order.Id);
+                    await _orderNotificationService.NotifyOrderCreated(order);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al enviar notificación SignalR para pedido {OrderId}", order.Id);
+            }
+
             _logger.LogInformation("Pedido {OrderId} creado desde mesa {TableId} - {TableNumber}", 
                 order.Id, table.Id, table.Number);
 
+            // Usar el pedido recargado con la información de la mesa si está disponible
+            var orderToReturn = orderWithTable ?? order;
+
             return Ok(new { 
-                id = order.Id, 
+                id = orderToReturn.Id, 
                 message = "Pedido creado exitosamente",
-                order = order,
+                order = orderToReturn,
                 table = table
             });
         }

@@ -207,10 +207,12 @@ export default function TablesViewPage() {
       const matchingOrders = Array.isArray(ordersData) ? ordersData.filter((o: any) => {
         const orderTableId = o.tableId ? Number(o.tableId) : null;
         const matches = orderTableId === tableIdNum;
+        // Incluir pedidos activos Y completados (para cobrar), excluir cancelados y archivados
+        const shouldInclude = o.status !== 'cancelled' && !o.isArchived;
         if (matches || orderTableId) {
-          console.log(`Pedido #${o.id} - tableId: ${orderTableId}, status: ${o.status}, matches: ${matches}`);
+          console.log(`Pedido #${o.id} - tableId: ${orderTableId}, status: ${o.status}, archivado: ${o.isArchived}, matches: ${matches}, incluido: ${shouldInclude}`);
         }
-        return matches && o.status !== 'completed' && o.status !== 'cancelled';
+        return matches && shouldInclude;
       }) : [];
       
       console.log('Pedidos que coinciden con mesa', table.id, ':', matchingOrders);
@@ -420,8 +422,16 @@ export default function TablesViewPage() {
         }
       }
       
+      // Procesar el pago de todos los pedidos
       for (const order of tableOrders) {
         await api.processTablePayment(order.id, selectedPaymentMethod);
+        // Archivar el pedido después de procesar el pago para que no siga apareciendo en la mesa
+        try {
+          await api.archiveOrder(order.id);
+        } catch (error: any) {
+          console.warn(`No se pudo archivar el pedido ${order.id}:`, error);
+          // Continuar aunque falle el archivado
+        }
       }
       
       await api.updateTableStatus(tableForPayment.id, 'Available');
@@ -430,6 +440,13 @@ export default function TablesViewPage() {
       
       // Marcar que el pago fue procesado para mostrar los botones de acción
       setPaymentProcessed(true);
+      
+      // Cerrar el modal de consumo si está abierto
+      if (isTableConsumptionModalOpen) {
+        setIsTableConsumptionModalOpen(false);
+        setTableForConsumption(null);
+        setTableConsumptionOrders([]);
+      }
       
       // Recargar datos de mesas para actualizar el estado visual
       await loadData();
@@ -1229,124 +1246,115 @@ export default function TablesViewPage() {
                 </div>
               ) : (
                 <div className="bg-white rounded-lg p-4 border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto">
-                  <div className="space-y-2">
-                    {(() => {
-                      // Recopilar todos los items de todos los pedidos
-                      const allItems: Array<{
-                        itemId: number;
-                        productName: string;
-                        quantity: number;
-                        unitPrice: number;
-                        subProducts?: Array<{ name: string; price: number }>;
-                        orderId: number;
-                      }> = [];
+                  <div className="space-y-4">
+                    {(tableConsumptionOrders || []).map((order) => {
+                      const isCompleted = order.status === 'completed';
+                      const isPreparing = order.status === 'preparing';
+                      const isPending = order.status === 'pending';
                       
-                      (tableConsumptionOrders || []).forEach((order) => {
-                        if (order.items && Array.isArray(order.items)) {
-                          order.items.forEach((item) => {
-                            if (item && item.productName) {
-                              // El item.id ahora debería estar presente después de agregar la propiedad Id al modelo
+                      return (
+                        <div 
+                          key={order.id} 
+                          className={`border rounded-lg p-3 ${isCompleted ? 'bg-green-50 border-green-200' : isPreparing ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-200'}`}
+                        >
+                          {/* Header del pedido con estado */}
+                          <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-200">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-800">Pedido #{order.id}</span>
+                              {isCompleted && (
+                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                  ✅ Listo
+                                </span>
+                              )}
+                              {isPreparing && (
+                                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                                  🔥 Preparando
+                                </span>
+                              )}
+                              {isPending && (
+                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                                  ⏳ Pendiente
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-sm font-medium text-gray-700">
+                              ${order.total.toFixed(2)}
+                            </span>
+                          </div>
+                          
+                          {/* Items del pedido */}
+                          <div className="space-y-1">
+                            {order.items && Array.isArray(order.items) && order.items.map((item, idx) => {
+                              if (!item || !item.productName) return null;
+                              
                               const itemId = item.id ?? (item as any).Id ?? null;
                               
-                              if (!itemId || itemId === 0) {
-                                console.warn('Item sin ID válido:', {
-                                  item,
-                                  orderId: order.id,
-                                  itemKeys: Object.keys(item),
-                                  itemValues: Object.entries(item).map(([k, v]) => ({ key: k, value: v, type: typeof v })),
-                                  fullItemString: JSON.stringify(item, null, 2)
-                                });
-                              }
+                              const handleDeleteItem = async () => {
+                                if (!itemId || itemId === 0) {
+                                  showToast('No se puede eliminar: el item no tiene un ID válido', 'error');
+                                  return;
+                                }
+                                
+                                if (!confirm(`¿Estás seguro de eliminar "${item.productName}" del pedido?`)) {
+                                  return;
+                                }
+                                
+                                try {
+                                  await api.deleteOrderItem(order.id, itemId);
+                                  showToast(`"${item.productName}" eliminado correctamente`, 'success');
+                                  
+                                  // Recargar consumo
+                                  const orders = await api.getOrdersByTable(tableForConsumption!.id);
+                                  setTableConsumptionOrders(orders);
+                                  
+                                  // Recargar datos de mesas para actualizar estado si es necesario
+                                  await loadData();
+                                } catch (error: any) {
+                                  showToast(error.message || 'Error al eliminar el item', 'error');
+                                }
+                              };
                               
-                              allItems.push({
-                                itemId: itemId || 0,
-                                productName: item.productName,
-                                quantity: item.quantity || 1,
-                                unitPrice: item.unitPrice || 0,
-                                subProducts: item.subProducts || undefined,
-                                orderId: order.id,
-                              });
-                            }
-                          });
-                        }
-                      });
-                      
-                      if (allItems.length === 0) {
-                        return <p className="text-sm text-gray-500 italic">Sin items en los pedidos</p>;
-                      }
-                      
-                      const handleDeleteItem = async (itemId: number, orderId: number, productName: string) => {
-                        if (!itemId || itemId === 0) {
-                          showToast('No se puede eliminar: el item no tiene un ID válido', 'error');
-                          console.error('Intento de eliminar item sin ID válido:', { itemId, orderId, productName });
-                          return;
-                        }
-                        
-                        if (!confirm(`¿Estás seguro de eliminar "${productName}" del pedido?`)) {
-                          return;
-                        }
-                        
-                        try {
-                          await api.deleteOrderItem(orderId, itemId);
-                          showToast(`"${productName}" eliminado correctamente`, 'success');
-                          
-                          // Recargar consumo
-                          const orders = await api.getOrdersByTable(tableForConsumption!.id);
-                          setTableConsumptionOrders(orders);
-                          
-                          // Recargar datos de mesas para actualizar estado si es necesario
-                          await loadData();
-                        } catch (error: any) {
-                          showToast(error.message || 'Error al eliminar el item', 'error');
-                        }
-                      };
-                      
-                      return allItems.map((item, idx) => (
-                        <div key={`${item.orderId}-${item.itemId}-${idx}`} className="flex items-start justify-between text-sm py-2 border-b last:border-b-0 hover:bg-gray-50 transition-colors">
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800">
-                              • {item.productName}
-                              {item.quantity > 1 && (
-                                <span className="text-gray-500 ml-1">x{item.quantity}</span>
-                              )}
-                            </div>
-                            {item.subProducts && Array.isArray(item.subProducts) && item.subProducts.length > 0 && (
-                              <div className="text-xs text-gray-600 mt-1 ml-4">
-                                └─ Guarniciones: {item.subProducts
-                                  .filter(sp => sp && sp.name)
-                                  .map(sp => sp.name)
-                                  .join(', ')}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 ml-4">
-                            <div className="text-right">
-                              <div className="font-medium text-gray-700">
-                                ${(item.unitPrice * item.quantity).toFixed(2)}
-                              </div>
-                              {item.quantity > 1 && (
-                                <div className="text-xs text-gray-500">
-                                  ${item.unitPrice.toFixed(2)} c/u
+                              return (
+                                <div key={`${order.id}-${itemId}-${idx}`} className="flex items-start justify-between text-sm py-1">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-800">
+                                      • {item.productName}
+                                      {item.quantity > 1 && (
+                                        <span className="text-gray-500 ml-1">x{item.quantity}</span>
+                                      )}
+                                    </div>
+                                    {item.subProducts && Array.isArray(item.subProducts) && item.subProducts.length > 0 && (
+                                      <div className="text-xs text-gray-600 mt-1 ml-4">
+                                        └─ Guarniciones: {item.subProducts
+                                          .filter(sp => sp && sp.name)
+                                          .map(sp => sp.name)
+                                          .join(', ')}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 ml-4">
+                                    <div className="text-right">
+                                      <div className="font-medium text-gray-700">
+                                        ${(item.unitPrice * item.quantity).toFixed(2)}
+                                      </div>
+                                    </div>
+                                    {!isCompleted && itemId && itemId > 0 && (
+                                      <button
+                                        onClick={handleDeleteItem}
+                                        className="p-1 text-red-600 hover:bg-red-50 active:bg-red-100 rounded transition-colors flex-shrink-0"
+                                        title="Eliminar item"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                            {item.itemId && item.itemId > 0 ? (
-                              <button
-                                onClick={() => handleDeleteItem(item.itemId, item.orderId, item.productName)}
-                                className="p-2 text-red-600 hover:bg-red-50 active:bg-red-100 rounded transition-colors flex-shrink-0"
-                                title="Eliminar item"
-                              >
-                                <X size={18} />
-                              </button>
-                            ) : (
-                              <span className="p-2 text-gray-400 cursor-not-allowed" title="No se puede eliminar: item sin ID válido">
-                                <X size={18} />
-                              </span>
-                            )}
+                              );
+                            })}
                           </div>
                         </div>
-                      ));
-                    })()}
+                      );
+                    })}
                   </div>
                 </div>
               )}

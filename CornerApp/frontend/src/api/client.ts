@@ -185,13 +185,15 @@ class ApiClient {
         
         const orderTableId = order.tableId ? Number(order.tableId) : null;
         const matchesTable = orderTableId === tableIdNum;
-        const isActive = order.status !== 'completed' && order.status !== 'cancelled';
+        // Incluir pedidos activos (pending, preparing, delivering) Y pedidos completados (para cobrar)
+        // Excluir cancelados y archivados (archivados = ya cobrados)
+        const shouldInclude = order.status !== 'cancelled' && !order.isArchived;
         
         if (matchesTable) {
-          console.log(`Pedido #${order.id} - tableId: ${orderTableId}, status: ${order.status}, activo: ${isActive}`);
+          console.log(`Pedido #${order.id} - tableId: ${orderTableId}, status: ${order.status}, archivado: ${order.isArchived}, incluido: ${shouldInclude}`);
         }
         
-        return matchesTable && isActive;
+        return matchesTable && shouldInclude;
       }
     );
     
