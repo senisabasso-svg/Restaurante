@@ -56,8 +56,13 @@ export default function ActiveOrdersPage() {
 
   const [searchParams] = useSearchParams();
 
+  // Detectar si el usuario es repartidor (tiene delivery_token)
+  const isDeliveryPerson = !!localStorage.getItem('delivery_token');
+
   // Determinar el tipo de filtro según la ruta
-  const orderType = location.pathname.includes('/salon') ? 'salon' : 
+  // Si es repartidor, solo puede ver delivery (nunca salon)
+  const orderType = isDeliveryPerson ? 'delivery' :
+                    location.pathname.includes('/salon') ? 'salon' : 
                     location.pathname.includes('/delivery') ? 'delivery' : 
                     'all';
 
@@ -107,9 +112,15 @@ export default function ActiveOrdersPage() {
       };
 
       // Filtrar según el tipo de pedido
-      const shouldInclude = orderType === 'all' || 
-                           (orderType === 'salon' && normalizedOrder.tableId != null) ||
-                           (orderType === 'delivery' && normalizedOrder.tableId == null);
+      // Si es repartidor, solo incluir pedidos asignados a él (sin tableId y con deliveryPersonId)
+      let shouldInclude: boolean;
+      if (isDeliveryPerson) {
+        shouldInclude = normalizedOrder.tableId == null && normalizedOrder.deliveryPersonId != null;
+      } else {
+        shouldInclude = orderType === 'all' || 
+                       (orderType === 'salon' && normalizedOrder.tableId != null) ||
+                       (orderType === 'delivery' && normalizedOrder.tableId == null);
+      }
 
       if (!shouldInclude) {
         return; // No agregar este pedido si no corresponde al tipo actual
@@ -135,10 +146,15 @@ export default function ActiveOrdersPage() {
     } else {
       console.log('ℹ️ ActiveOrders: Pedido no es activo, ignorando. Status:', orderStatus);
     }
-  }, [showToast, playSound, orderType]);
+  }, [showToast, playSound, orderType, isDeliveryPerson]);
 
   // Función helper para filtrar pedidos según el tipo
   const filterOrdersByType = useCallback((ordersArray: Order[]): Order[] => {
+    // Si es repartidor, solo mostrar sus pedidos asignados (ya filtrados por el backend)
+    if (isDeliveryPerson) {
+      return ordersArray.filter((o: Order) => o.tableId == null && o.deliveryPersonId != null);
+    }
+    
     if (orderType === 'salon') {
       // Solo pedidos de salón (con TableId)
       return ordersArray.filter((o: Order) => o.tableId != null);
@@ -148,15 +164,23 @@ export default function ActiveOrdersPage() {
     }
     // Todos los pedidos
     return ordersArray;
-  }, [orderType]);
+  }, [orderType, isDeliveryPerson]);
 
   const loadData = useCallback(async () => {
     try {
-      console.log('📥 ActiveOrders: Iniciando carga de datos...');
+      console.log('📥 ActiveOrders: Iniciando carga de datos... orderType:', orderType, 'isDeliveryPerson:', isDeliveryPerson);
       setLoading(true);
-      const [ordersResponse, deliveryData] = await Promise.all([
-        api.getActiveOrders(),
-        api.getActiveDeliveryPersons(),
+      
+      // Si es repartidor, cargar solo sus pedidos asignados
+      let ordersResponse: Order[];
+      if (isDeliveryPerson) {
+        ordersResponse = await api.getDeliveryPersonOrders();
+      } else {
+        ordersResponse = await api.getActiveOrders();
+      }
+      
+      const [deliveryData] = await Promise.all([
+        isDeliveryPerson ? Promise.resolve([]) : api.getActiveDeliveryPersons(),
       ]);
       // El backend devuelve una respuesta paginada con propiedad 'data'
       const ordersArray = Array.isArray(ordersResponse)
@@ -238,7 +262,7 @@ export default function ActiveOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterOrdersByType, showToast, orderType]);
+  }, [filterOrdersByType, showToast, orderType, isDeliveryPerson]);
 
   const handleOrderUpdated = useCallback((order: Order) => {
     console.log('🔄 ActiveOrders: handleOrderUpdated llamado con:', {
@@ -280,7 +304,8 @@ export default function ActiveOrdersPage() {
     // para un pedido con tableId, SIEMPRE forzar recarga para asegurar que la vista esté actualizada
     // Esto es especialmente importante cuando se transfieren pedidos entre mesas
     // (El pedido puede ya tener el nuevo tableId en el estado si se actualizó antes de que llegara la notificación)
-    if (orderType === 'salon' && order.tableId != null && ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
+    // Si es repartidor, no procesar pedidos de salón
+    if (!isDeliveryPerson && orderType === 'salon' && order.tableId != null && ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
       console.log('🔄 ActiveOrders: ⚠️ Notificación de OrderUpdated recibida para pedido de salón. Forzando recarga para asegurar consistencia...', {
         orderId: order.id,
         tableId: order.tableId,
@@ -320,9 +345,11 @@ export default function ActiveOrdersPage() {
     // FORZAR RECARGA para asegurar que la vista se actualice correctamente
     if (!existingOrder && order.tableId != null && ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
       // Verificar si el pedido debería estar en esta vista
-      const shouldBeInView = orderType === 'all' || 
-                            (orderType === 'salon' && order.tableId != null) ||
-                            (orderType === 'delivery' && order.tableId == null);
+      const shouldBeInView = isDeliveryPerson 
+        ? (order.tableId == null && order.deliveryPersonId != null)
+        : (orderType === 'all' || 
+           (orderType === 'salon' && order.tableId != null) ||
+           (orderType === 'delivery' && order.tableId == null));
       
       if (shouldBeInView) {
         console.log('🔄 ActiveOrders: Pedido transferido detectado (no estaba en estado pero debería estar). Forzando recarga...', {
@@ -357,9 +384,11 @@ export default function ActiveOrdersPage() {
     // Si no cambió de mesa, continuar con la lógica normal de actualización
     if (ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
       // Verificar si el pedido corresponde al tipo actual
-      const shouldInclude = orderType === 'all' || 
-                           (orderType === 'salon' && order.tableId != null) ||
-                           (orderType === 'delivery' && order.tableId == null);
+      const shouldInclude = isDeliveryPerson
+        ? (order.tableId == null && order.deliveryPersonId != null)
+        : (orderType === 'all' || 
+           (orderType === 'salon' && order.tableId != null) ||
+           (orderType === 'delivery' && order.tableId == null));
       
       console.log('🔍 ActiveOrders: Verificando si incluir pedido:', {
         orderId: order.id,
@@ -415,7 +444,7 @@ export default function ActiveOrdersPage() {
       console.log('❌ ActiveOrders: Pedido', order.id, 'ya no es activo, removiendo');
       setOrders(prev => prev.filter(o => o.id !== order.id));
     }
-  }, [orderType, loadData]);
+  }, [orderType, loadData, isDeliveryPerson]);
 
   const handleOrderStatusChanged = useCallback((event: { orderId: number; status: string }) => {
     if (ACTIVE_STATUSES.includes(event.status as OrderStatus)) {
@@ -424,9 +453,11 @@ export default function ActiveOrdersPage() {
         if (!order) return prev;
         
         // Verificar si el pedido actualizado corresponde al tipo actual
-        const shouldInclude = orderType === 'all' || 
-                             (orderType === 'salon' && order.tableId != null) ||
-                             (orderType === 'delivery' && order.tableId == null);
+        const shouldInclude = isDeliveryPerson
+          ? (order.tableId == null && order.deliveryPersonId != null)
+          : (orderType === 'all' || 
+             (orderType === 'salon' && order.tableId != null) ||
+             (orderType === 'delivery' && order.tableId == null));
         
         if (shouldInclude) {
           return prev.map(o =>
@@ -442,7 +473,7 @@ export default function ActiveOrdersPage() {
       setOrders(prev => prev.filter(o => o.id !== event.orderId));
       showToast(`Pedido #${event.orderId} ${event.status === 'completed' ? 'completado' : 'actualizado'} `, 'info');
     }
-  }, [showToast, orderType]);
+  }, [showToast, orderType, isDeliveryPerson]);
 
   const handleOrderDeleted = useCallback((event: { orderId: number }) => {
     setOrders(prev => prev.filter(o => o.id !== event.orderId));
@@ -617,7 +648,8 @@ export default function ActiveOrdersPage() {
           <div className="flex items-center gap-3">
             <div>
               <h1 className="text-xl font-bold text-gray-800">
-                {orderType === 'salon' ? '🍽️ Pedidos Activos - Salón' : 
+                {isDeliveryPerson ? '🚚 Mis Pedidos Asignados' :
+                 orderType === 'salon' ? '🍽️ Pedidos Activos - Salón' : 
                  orderType === 'delivery' ? '🚚 Pedidos Activos - Delivery' : 
                  '📋 Pedidos Activos'}
               </h1>
@@ -669,7 +701,8 @@ export default function ActiveOrdersPage() {
             <CheckCircle size={64} className="mx-auto mb-4 text-green-400" />
             <h2 className="text-xl font-bold text-gray-800 mb-2">¡Todo al día!</h2>
             <p className="text-gray-500">
-              {orderType === 'salon' ? 'No hay pedidos activos de salón en este momento' : 
+              {isDeliveryPerson ? 'No tienes pedidos asignados en este momento' :
+               orderType === 'salon' ? 'No hay pedidos activos de salón en este momento' : 
                orderType === 'delivery' ? 'No hay pedidos activos de delivery en este momento' : 
                'No hay pedidos activos en este momento'}
             </p>

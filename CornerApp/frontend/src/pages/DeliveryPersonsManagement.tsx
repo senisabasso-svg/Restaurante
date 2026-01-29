@@ -318,7 +318,7 @@ export default function DeliveryPersonsManagementPage() {
 
   const loadDeliveryPersonOrders = async (deliveryPersonId: number, includeCompleted: boolean = false) => {
     try {
-      const orders = await api.getDeliveryPersonOrders(deliveryPersonId, includeCompleted);
+      const orders = await api.getDeliveryPersonOrdersByAdmin(deliveryPersonId, includeCompleted);
       setDeliveryPersonOrders(orders);
     } catch (error) {
       console.error('Error al cargar pedidos:', error);

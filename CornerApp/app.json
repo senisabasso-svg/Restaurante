@@ -43,6 +43,10 @@
       ],
       "expo-font"
     ],
-    "web": {}
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/logo.png"
+    }
   }
 }

@@ -9,12 +9,9 @@ import {
   XCircle,
   AlertTriangle,
   Eye,
-  Play,
   PackageCheck,
   Wifi,
-  WifiOff,
-  DollarSign,
-  X
+  WifiOff
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useToast } from '../components/Toast/ToastContext';
@@ -32,15 +29,14 @@ const statusConfig: Record<OrderStatus, { label: string; color: string; bgColor:
   cancelled: { label: 'Cancelado', color: 'text-red-600', bgColor: 'bg-red-100', icon: XCircle },
 };
 
+// Estados activos para repartidores: solo pedidos que están siendo preparados o en camino
+const ACTIVE_STATUSES: OrderStatus[] = ['preparing', 'delivering'];
+
 export default function DeliveryOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [cashRegisterStatus, setCashRegisterStatus] = useState<{ isOpen: boolean; cashRegister: any } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
-  const [isOpeningCashRegister, setIsOpeningCashRegister] = useState(false);
-  const [isClosingCashRegister, setIsClosingCashRegister] = useState(false);
-  const [closeNotes, setCloseNotes] = useState('');
-  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Modals
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -52,7 +48,8 @@ export default function DeliveryOrdersPage() {
 
   // SignalR handlers
   const handleOrderCreated = useCallback((order: Order) => {
-    // Solo agregar si está asignado al repartidor actual
+    // Solo agregar si está asignado al repartidor actual y está en estado activo
+    // El backend ya filtra por repartidor, pero verificamos por seguridad
     if (order.deliveryPersonId && ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
       setOrders(prev => {
         const exists = prev.some(o => o.id === order.id);
@@ -67,6 +64,7 @@ export default function DeliveryOrdersPage() {
   }, [showToast, playSound]);
 
   const handleOrderUpdated = useCallback((order: Order) => {
+    // Si está asignado y en estado activo, actualizar o agregar
     if (order.deliveryPersonId && ACTIVE_STATUSES.includes(order.status as OrderStatus)) {
       setOrders(prev => {
         const exists = prev.some(o => o.id === order.id);
@@ -103,33 +101,24 @@ export default function DeliveryOrdersPage() {
     onConnectionStatusChange: setIsConnected,
   });
 
-  const ACTIVE_STATUSES: OrderStatus[] = ['preparing', 'delivering'];
-
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const status = await api.getDeliveryCashRegisterStatus();
-      setCashRegisterStatus(status);
-      
-      if (status.isOpen) {
-        try {
-          const ordersData = await api.getDeliveryOrders();
-          setOrders(Array.isArray(ordersData) ? ordersData : []);
-        } catch (error: any) {
-          // Si falla obtener pedidos pero la caja está abierta, solo mostrar error
-          console.error('Error al cargar pedidos:', error);
-          setOrders([]);
-        }
-      } else {
-        setOrders([]);
-      }
+      setError(null);
+      // Cargar solo los pedidos asignados al repartidor autenticado
+      const ordersData = await api.getDeliveryPersonOrders();
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
     } catch (error: any) {
-      console.error('Error al cargar datos:', error);
-      if (error.response?.status !== 400) { // Ignorar error 400 (caja no abierta)
-        showToast(error.message || 'Error al cargar datos', 'error');
-      }
-      setCashRegisterStatus({ isOpen: false, cashRegister: null });
+      console.error('Error al cargar pedidos:', error);
+      const errorMessage = error.message || 'Error al cargar pedidos';
+      setError(errorMessage);
       setOrders([]);
+      try {
+        showToast(errorMessage, 'error');
+      } catch (toastError) {
+        // Si showToast falla, al menos mostrar el error en la UI
+        console.error('Error al mostrar toast:', toastError);
+      }
     } finally {
       setLoading(false);
     }
@@ -137,53 +126,35 @@ export default function DeliveryOrdersPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  // Recargar pedidos periódicamente si la caja está abierta
+  // Recargar pedidos periódicamente
   useEffect(() => {
-    if (cashRegisterStatus?.isOpen) {
-      const interval = setInterval(() => {
-        loadData();
-      }, 10000); // Cada 10 segundos
-      return () => clearInterval(interval);
-    }
-  }, [cashRegisterStatus?.isOpen, loadData]);
-
-  const handleOpenCashRegister = async () => {
-    try {
-      setIsOpeningCashRegister(true);
-      await api.openDeliveryCashRegister();
-      showToast('Caja abierta exitosamente', 'success');
-      await loadData();
-    } catch (error: any) {
-      showToast(error.message || 'Error al abrir la caja', 'error');
-    } finally {
-      setIsOpeningCashRegister(false);
-    }
-  };
-
-  const handleCloseCashRegister = async () => {
-    try {
-      setIsClosingCashRegister(true);
-      await api.closeDeliveryCashRegister(closeNotes || undefined);
-      showToast('Caja cerrada exitosamente', 'success');
-      setCloseNotes('');
-      setIsCloseModalOpen(false);
-      await loadData();
-    } catch (error: any) {
-      showToast(error.message || 'Error al cerrar la caja', 'error');
-    } finally {
-      setIsClosingCashRegister(false);
-    }
-  };
+    const interval = setInterval(() => {
+      loadData();
+    }, 10000); // Cada 10 segundos
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
     try {
       await api.updateDeliveryOrderStatus(order.id, newStatus);
-      showToast(`Estado actualizado a ${statusConfig[newStatus].label}`, 'success');
+      const statusLabel = newStatus === 'cancelled' ? 'Rechazado' : statusConfig[newStatus].label;
+      showToast(`Estado actualizado a ${statusLabel}`, 'success');
       await loadData();
     } catch (error: any) {
       showToast(error.message || 'Error al actualizar estado', 'error');
+    }
+  };
+
+  const handleRejectOrder = async (order: Order) => {
+    try {
+      await api.updateDeliveryOrderStatus(order.id, 'cancelled');
+      showToast(`Pedido #${order.id} rechazado`, 'success');
+      setConfirmAction(null);
+      await loadData();
+    } catch (error: any) {
+      showToast(error.message || 'Error al rechazar pedido', 'error');
     }
   };
 
@@ -195,36 +166,17 @@ export default function DeliveryOrdersPage() {
     );
   }
 
-  // Si no hay caja abierta, mostrar pantalla para abrirla
-  if (!cashRegisterStatus?.isOpen) {
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="bg-white rounded-xl shadow-md p-8 max-w-md w-full text-center">
-          <div className="mb-6">
-            <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Truck size={40} className="text-purple-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Abrir Caja de Repartidor</h2>
-            <p className="text-gray-600">
-              Para gestionar tus pedidos, primero debes abrir tu caja de trabajo.
-            </p>
-          </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+          <h2 className="text-lg font-bold text-red-800 mb-2">Error al cargar pedidos</h2>
+          <p className="text-red-600 mb-4">{error}</p>
           <button
-            onClick={handleOpenCashRegister}
-            disabled={isOpeningCashRegister}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => loadData()}
+            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
-            {isOpeningCashRegister ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Abriendo...
-              </>
-            ) : (
-              <>
-                <Play size={20} />
-                Abrir Caja
-              </>
-            )}
+            Reintentar
           </button>
         </div>
       </div>
@@ -232,13 +184,13 @@ export default function DeliveryOrdersPage() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header con estado de caja */}
+    <div className="space-y-4" style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+      {/* Header */}
       <div className="bg-white rounded-xl shadow-md p-4">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">🚚 Mis Pedidos de Delivery</h1>
+              <h1 className="text-xl font-bold text-gray-800">🚚 Mis Pedidos Asignados</h1>
               <p className="text-sm text-gray-500">
                 {orders.length} pedido{orders.length !== 1 ? 's' : ''} asignado{orders.length !== 1 ? 's' : ''}
               </p>
@@ -255,31 +207,7 @@ export default function DeliveryOrdersPage() {
               {isConnected ? 'En vivo' : 'Offline'}
             </div>
           </div>
-
-          {/* Botón cerrar caja */}
-          <button
-            onClick={() => setIsCloseModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
-          >
-            <X size={18} />
-            Cerrar Caja
-          </button>
         </div>
-
-        {/* Info de caja abierta */}
-        {cashRegisterStatus.cashRegister && (
-          <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-purple-700">
-                <DollarSign size={16} />
-                <span>Caja abierta desde {new Date(cashRegisterStatus.cashRegister.openedAt).toLocaleTimeString('es-ES')}</span>
-              </div>
-              <div className="text-purple-600">
-                {cashRegisterStatus.cashRegister.activeOrders || 0} activos | {cashRegisterStatus.cashRegister.completedOrders || 0} completados
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Lista de pedidos */}
@@ -363,22 +291,44 @@ export default function DeliveryOrdersPage() {
                 <div className="p-4 bg-gray-50 border-t border-gray-100">
                   <div className="flex gap-2">
                     {order.status === 'preparing' && (
-                      <button
-                        onClick={() => handleStatusChange(order, 'delivering')}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-medium"
-                      >
-                        <Truck size={16} />
-                        En Camino
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleStatusChange(order, 'delivering')}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-medium"
+                        >
+                          <Truck size={16} />
+                          En Camino
+                        </button>
+                        <button
+                          onClick={() => {
+                            setConfirmAction({ type: 'reject', order });
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
+                        >
+                          <XCircle size={16} />
+                          Rechazar
+                        </button>
+                      </>
                     )}
                     {order.status === 'delivering' && (
-                      <button
-                        onClick={() => handleStatusChange(order, 'completed')}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
-                      >
-                        <PackageCheck size={16} />
-                        Entregado
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleStatusChange(order, 'completed')}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
+                        >
+                          <PackageCheck size={16} />
+                          Entregado
+                        </button>
+                        <button
+                          onClick={() => {
+                            setConfirmAction({ type: 'reject', order });
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
+                        >
+                          <XCircle size={16} />
+                          Rechazar
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => {
@@ -440,61 +390,21 @@ export default function DeliveryOrdersPage() {
         )}
       </Modal>
 
-      {/* Modal de cerrar caja */}
-      <Modal
-        isOpen={isCloseModalOpen}
-        onClose={() => {
-          setIsCloseModalOpen(false);
-          setCloseNotes('');
+      {/* Modal de confirmación para rechazar pedido */}
+      <ConfirmModal
+        isOpen={confirmAction?.type === 'reject'}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (confirmAction?.order) {
+            handleRejectOrder(confirmAction.order);
+          }
         }}
-        title="Cerrar Caja"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            ¿Estás seguro de que deseas cerrar tu caja? Asegúrate de haber completado todos los pedidos activos.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notas (opcional)
-            </label>
-            <textarea
-              value={closeNotes}
-              onChange={(e) => setCloseNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              rows={3}
-              placeholder="Notas sobre el cierre de caja..."
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              onClick={() => {
-                setIsCloseModalOpen(false);
-                setCloseNotes('');
-              }}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleCloseCashRegister}
-              disabled={isClosingCashRegister}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isClosingCashRegister ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Cerrando...
-                </>
-              ) : (
-                <>
-                  <X size={18} />
-                  Cerrar Caja
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        title="Rechazar Pedido"
+        message={`¿Estás seguro de que deseas rechazar el pedido #${confirmAction?.order?.id}? Esta acción no se puede deshacer.`}
+        confirmText="Rechazar"
+        cancelText="Cancelar"
+        confirmButtonClass="bg-red-500 hover:bg-red-600"
+      />
     </div>
   );
 }

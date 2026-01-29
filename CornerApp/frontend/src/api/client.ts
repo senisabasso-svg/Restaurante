@@ -41,11 +41,14 @@ class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, config);
 
     if (!response.ok) {
-      // Si es 401 (No autorizado), limpiar token y redirigir al login
+      // Si es 401 (No autorizado), limpiar tokens y redirigir al login apropiado
       if (response.status === 401) {
+        const isDeliveryRoute = endpoint.includes('/deliveryperson/') || endpoint.includes('/delivery/');
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
-        window.location.href = '/login';
+        localStorage.removeItem('delivery_token');
+        localStorage.removeItem('delivery_user');
+        window.location.href = isDeliveryRoute ? '/delivery/login' : '/login';
         throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
       }
 
@@ -343,7 +346,8 @@ class ApiClient {
     });
   }
 
-  async getDeliveryPersonOrders(deliveryPersonId: number, includeCompleted: boolean = false) {
+  // Admin: Obtener pedidos de un repartidor específico
+  async getDeliveryPersonOrdersByAdmin(deliveryPersonId: number, includeCompleted: boolean = false) {
     return this.request<Order[]>(`/admin/api/delivery-persons/${deliveryPersonId}/orders?includeCompleted=${includeCompleted}`);
   }
 
@@ -607,7 +611,8 @@ class ApiClient {
     return this.request<Order[]>('/api/delivery-cash-register/orders');
   }
 
-  async updateDeliveryOrderStatus(orderId: number, status: string, note?: string) {
+  // Delivery Cash Register: Actualizar estado de pedido con nota
+  async updateDeliveryCashRegisterOrderStatus(orderId: number, status: string, note?: string) {
     return this.request<Order>(`/api/delivery-cash-register/orders/${orderId}/status`, {
       method: 'PATCH',
       body: { status, note },
@@ -626,6 +631,43 @@ class ApiClient {
 
   async getCashRegisterMovements(cashRegisterId: number) {
     return this.request<any>(`/admin/api/cash-register/${cashRegisterId}/movements`);
+  }
+
+  // Delivery Person (Repartidor) endpoints
+  async deliveryPersonLogin(username: string, password: string) {
+    return this.request<{ token: string; deliveryPerson: any }>('/api/deliveryperson/login', {
+      method: 'POST',
+      body: { username, password },
+      skipAuth: true,
+    });
+  }
+
+  async getDeliveryPersonOrders() {
+    return this.request<Order[]>('/api/deliveryperson/orders');
+  }
+
+  async getDeliveryPersonOrder(orderId: number) {
+    return this.request<Order>(`/api/deliveryperson/orders/${orderId}`);
+  }
+
+  async updateDeliveryPersonLocation(orderId: number, latitude: number, longitude: number) {
+    return this.request<any>(`/api/deliveryperson/orders/${orderId}/location`, {
+      method: 'PATCH',
+      body: { latitude, longitude },
+    });
+  }
+
+  async updateDeliveryOrderStatus(orderId: number, status: string) {
+    return this.request<Order>(`/api/deliveryperson/orders/${orderId}/status`, {
+      method: 'PATCH',
+      body: { status },
+    });
+  }
+
+  async verifyDeliveryPersonToken() {
+    return this.request<{ deliveryPerson: any }>('/api/deliveryperson/verify', {
+      method: 'POST',
+    });
   }
 
   // Admin Users

@@ -7,7 +7,17 @@
     <UseAppHost>false</UseAppHost>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <IncludeSourceRevisionInAssembly>false</IncludeSourceRevisionInAssembly>
+    <Deterministic>false</Deterministic>
+    <EnableSourceLink>false</EnableSourceLink>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
   </PropertyGroup>
+
+  <Target Name="DisableGitInfo" BeforeTargets="GetSourceRevisionId" Condition="'$(EnableSourceControlManagerQueries)' == 'false'">
+    <PropertyGroup>
+      <SourceRevisionId>N/A</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />

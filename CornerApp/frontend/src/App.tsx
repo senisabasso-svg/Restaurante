@@ -1,7 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout/Layout';
+import DeliveryLayout from './components/Layout/DeliveryLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import DeliveryProtectedRoute from './components/DeliveryProtectedRoute';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import LoginPage from './pages/Login';
+import DeliveryLoginPage from './pages/DeliveryLogin';
 import Dashboard from './pages/Dashboard';
 import OrdersPage from './pages/Orders';
 import ProductsPage from './pages/Products';
@@ -29,6 +33,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/delivery/login" element={<DeliveryLoginPage />} />
       <Route path="/mozo" element={<WaiterPage />} />
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route
@@ -51,7 +56,6 @@ export default function App() {
         <Route path="/admin/products" element={<ProductsPage />} />
         <Route path="/admin/categories" element={<CategoriesPage />} />
         <Route path="/admin/delivery-persons" element={<DeliveryPersonsPage />} />
-        <Route path="/delivery/orders" element={<DeliveryOrdersPage />} />
         <Route path="/admin/customers" element={<CustomersPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/reports" element={<ReportsPage />} />
@@ -63,6 +67,18 @@ export default function App() {
         <Route path="/admin/settings/payments" element={<SettingsPaymentsPage />} />
         <Route path="/admin/settings/email" element={<SettingsEmailPage />} />
         <Route path="/admin/settings/rewards" element={<SettingsRewardsPage />} />
+      </Route>
+      {/* Rutas protegidas para repartidores */}
+      <Route
+        element={
+          <ErrorBoundary>
+            <DeliveryProtectedRoute>
+              <DeliveryLayout />
+            </DeliveryProtectedRoute>
+          </ErrorBoundary>
+        }
+      >
+        <Route path="/delivery/orders" element={<ErrorBoundary><DeliveryOrdersPage /></ErrorBoundary>} />
       </Route>
     </Routes>
   );

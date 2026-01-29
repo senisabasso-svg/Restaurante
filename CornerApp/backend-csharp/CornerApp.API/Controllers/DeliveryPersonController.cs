@@ -108,6 +108,7 @@ public class DeliveryPersonController : ControllerBase
     /// Login para repartidores
     /// </summary>
     [HttpPost("login")]
+    [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] DeliveryPersonLoginRequest? request)
     {
         // Validar ModelState (validación automática de [ApiController])
@@ -128,6 +129,7 @@ public class DeliveryPersonController : ControllerBase
             return BadRequest(new { error = "El cuerpo de la solicitud es requerido" });
         }
 
+        // Validar y sanitizar entrada
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         {
             _logger.LogWarning("Intento de login con campos vacíos. Username: {HasUsername}, Password: {HasPassword}", 
@@ -136,10 +138,24 @@ public class DeliveryPersonController : ControllerBase
             return BadRequest(new { error = "Usuario y contraseña son requeridos" });
         }
 
+        // Sanitizar username: eliminar espacios y limitar longitud
+        var username = request.Username.Trim();
+        if (username.Length > 100)
+        {
+            _logger.LogWarning("Intento de login con username demasiado largo: {Length} caracteres", username.Length);
+            return BadRequest(new { error = "El nombre de usuario es inválido" });
+        }
+
+        // Validar longitud mínima de contraseña
+        if (request.Password.Length < 1)
+        {
+            _logger.LogWarning("Intento de login con contraseña vacía");
+            return BadRequest(new { error = "La contraseña es requerida" });
+        }
+
         // EF Core no puede traducir StringComparison.OrdinalIgnoreCase a SQL
         // Usar ToLower() en ambos lados para comparación case-insensitive que EF Core puede traducir
-        // También usar Trim() para eliminar espacios en blanco del input
-        var usernameLower = request.Username.Trim().ToLower();
+        var usernameLower = username.ToLower();
         
         // Buscar el usuario - cargar y comparar en memoria para manejar espacios correctamente
         // Esto es necesario porque EF Core no puede traducir Trim() a SQL
@@ -392,8 +408,8 @@ public class DeliveryPersonController : ControllerBase
             return NotFound(new { error = "Pedido no encontrado o no asignado a este repartidor" });
         }
 
-        // Solo permitir cambiar a estados de entrega
-        var allowedStatuses = new[] { OrderConstants.STATUS_DELIVERING, OrderConstants.STATUS_COMPLETED };
+        // Permitir cambiar a estados de entrega o cancelar
+        var allowedStatuses = new[] { OrderConstants.STATUS_DELIVERING, OrderConstants.STATUS_COMPLETED, OrderConstants.STATUS_CANCELLED };
         if (!allowedStatuses.Contains(request.Status))
         {
             return BadRequest(new { error = $"Solo se puede cambiar a: {string.Join(", ", allowedStatuses)}" });

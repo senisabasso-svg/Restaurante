@@ -143,7 +143,7 @@ let cachedIP = null;
 const getLocalIP = async () => {
   // Ya no forzamos la IP manualmente, dejamos que la detección automática trabaje
   // pero mantendremos una por defecto solo como último recurso extremo.
-  const DEFAULT_IP = '192.168.1.36'; 
+  const DEFAULT_IP = '192.168.1.201'; 
 
   // Si ya tenemos la IP en caché, usarla
   if (cachedIP) {
@@ -176,7 +176,7 @@ const getLocalIP = async () => {
   }
 
   // Si no se pudo detectar, usar IP por defecto
-  const defaultIP = '192.168.1.36';
+  const defaultIP = '192.168.1.201';
   console.log('⚠️ No se pudo detectar la IP automáticamente, usando IP por defecto:', defaultIP);
   console.log('💡 Para actualizar la IP automáticamente, asegúrate de que Expo esté mostrando la IP en la consola');
   return defaultIP;
@@ -217,7 +217,7 @@ const getBaseUrl = async () => {
 // Inicializar API_BASE_URL de forma asíncrona
 // Para web, usar localhost directamente
 // Para móvil, se actualizará automáticamente con la IP detectada
-let API_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5002' : 'http://192.168.43.17:5002'; // Valor por defecto (se actualizará automáticamente)
+let API_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5002' : 'http://192.168.1.201:5002'; // Valor por defecto (se actualizará automáticamente)
 
 // Crear cliente axios (se actualizará cuando se detecte la IP)
 const apiClient = axios.create({

@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0', // Permitir acceso desde la red local
     port: 3000,
     proxy: {
       '/api': {
