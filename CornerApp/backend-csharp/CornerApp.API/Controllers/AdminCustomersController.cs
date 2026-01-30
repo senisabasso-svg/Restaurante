@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using CornerApp.API.Data;
 using CornerApp.API.Constants;
+using CornerApp.API.DTOs;
+using CornerApp.API.Models;
 
 namespace CornerApp.API.Controllers;
 
@@ -52,7 +54,8 @@ public class AdminCustomersController : ControllerBase
                     (c.Name != null && c.Name.Contains(searchLower, StringComparison.OrdinalIgnoreCase)) ||
                     (c.Phone != null && c.Phone.Contains(searchLower, StringComparison.OrdinalIgnoreCase)) ||
                     (c.Email != null && c.Email.Contains(searchLower, StringComparison.OrdinalIgnoreCase)) ||
-                    (c.DefaultAddress != null && c.DefaultAddress.Contains(searchLower, StringComparison.OrdinalIgnoreCase))
+                    (c.DefaultAddress != null && c.DefaultAddress.Contains(searchLower, StringComparison.OrdinalIgnoreCase)) ||
+                    (c.DocumentNumber != null && c.DocumentNumber.Contains(searchLower, StringComparison.OrdinalIgnoreCase))
                 );
             }
             
@@ -77,6 +80,8 @@ public class AdminCustomersController : ControllerBase
                     c.Email,
                     c.Phone,
                     c.DefaultAddress,
+                    c.DocumentType,
+                    c.DocumentNumber,
                     c.Points,
                     c.CreatedAt,
                     OrdersCount = c.Orders.Count,
@@ -103,6 +108,85 @@ public class AdminCustomersController : ControllerBase
     }
 
     /// <summary>
+    /// Crea un nuevo cliente
+    /// </summary>
+    [HttpPost]
+    public async Task<ActionResult> CreateCustomer([FromBody] CreateCustomerRequest request)
+    {
+        try
+        {
+            // Verificar si ya existe un cliente con el mismo teléfono o email
+            var existingCustomer = await _context.Customers
+                .FirstOrDefaultAsync(c => c.Phone == request.Phone || c.Email == request.Email);
+
+            if (existingCustomer != null)
+            {
+                // Actualizar cliente existente
+                existingCustomer.Name = request.Name;
+                existingCustomer.Email = request.Email;
+                existingCustomer.Phone = request.Phone;
+                existingCustomer.DefaultAddress = request.DefaultAddress;
+                existingCustomer.DocumentType = request.DocumentType;
+                existingCustomer.DocumentNumber = request.DocumentNumber;
+                existingCustomer.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                
+                return Ok(new
+                {
+                    existingCustomer.Id,
+                    existingCustomer.Name,
+                    existingCustomer.Email,
+                    existingCustomer.Phone,
+                    existingCustomer.DefaultAddress,
+                    existingCustomer.DocumentType,
+                    existingCustomer.DocumentNumber,
+                    existingCustomer.Points,
+                    existingCustomer.CreatedAt,
+                    existingCustomer.UpdatedAt
+                });
+            }
+
+            var customer = new Customer
+            {
+                Name = request.Name,
+                Phone = request.Phone,
+                Email = request.Email,
+                DefaultAddress = request.DefaultAddress,
+                DocumentType = request.DocumentType,
+                DocumentNumber = request.DocumentNumber,
+                Points = 0,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.Customers.Add(customer);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Cliente creado: {CustomerId}", customer.Id);
+
+            return Ok(new
+            {
+                customer.Id,
+                customer.Name,
+                customer.Email,
+                customer.Phone,
+                customer.DefaultAddress,
+                customer.DocumentType,
+                customer.DocumentNumber,
+                customer.Points,
+                customer.CreatedAt,
+                customer.UpdatedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al crear cliente");
+            return StatusCode(500, new { error = "Error al crear el cliente", details = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Obtiene un cliente por ID
     /// </summary>
     [HttpGet("{id}")]
@@ -119,6 +203,8 @@ public class AdminCustomersController : ControllerBase
                 c.Email,
                 c.Phone,
                 c.DefaultAddress,
+                c.DocumentType,
+                c.DocumentNumber,
                 c.Points,
                 c.CreatedAt,
                 c.UpdatedAt,

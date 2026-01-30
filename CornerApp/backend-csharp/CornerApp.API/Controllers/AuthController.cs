@@ -293,7 +293,7 @@ public class AuthController : ControllerBase
                 username = admin.Username,
                 email = admin.Email,
                 name = admin.Name,
-                role = "Admin"
+                role = admin.Role ?? "Employee"
             }
         });
     }

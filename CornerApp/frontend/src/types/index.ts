@@ -238,12 +238,23 @@ export interface Customer {
   email?: string;
   phone?: string;
   defaultAddress?: string;
+  documentType?: string; // Cedula, Rut, Otro
+  documentNumber?: string;
   points: number;
   ordersCount: number;
   totalSpent?: number;
   createdAt: string;
   updatedAt?: string;
   recentOrders?: { id: number; status: string; total: number; createdAt: string }[];
+}
+
+export interface CreateCustomerRequest {
+  name: string;
+  phone: string;
+  email: string;
+  defaultAddress?: string;
+  documentType?: string; // Cedula, Rut, Otro
+  documentNumber?: string;
 }
 
 // Order Status History

@@ -537,6 +537,10 @@ class ApiClient {
     return this.request<{ totalCustomers: number; totalPoints: number; customersWithOrders: number }>('/admin/api/customers/stats');
   }
 
+  async createCustomer(data: CreateCustomerRequest) {
+    return this.request<Customer>('/admin/api/customers', { method: 'POST', body: data });
+  }
+
   async deleteCustomer(id: number) {
     return this.request(`/admin/api/customers/${id}`, { method: 'DELETE' });
   }
@@ -759,6 +763,7 @@ import type {
   DashboardStats,
   OrderStatusHistoryItem,
   Customer,
+  CreateCustomerRequest,
   BusinessInfo,
   UpdateBusinessInfoRequest,
   DeliveryZoneConfig,

@@ -77,13 +77,15 @@ export default function DeliveryPersonsManagementPage() {
 
   const loadProducts = async () => {
     try {
-      const productsData = await api.getProducts();
+      const [productsData, categoriesData] = await Promise.all([
+        api.getProducts(),
+        api.getCategories()
+      ]);
       setProducts(productsData);
       
-      // Cargar categorías únicas
-      const uniqueCategories = Array.from(
-        new Map(productsData.map(p => [p.categoryId, { id: p.categoryId, name: p.categoryName }])).values()
-      );
+      // Cargar categorías únicas de los productos
+      const productCategoryIds = new Set(productsData.map(p => p.categoryId));
+      const uniqueCategories = categoriesData.filter(cat => productCategoryIds.has(cat.id));
       setCategories(uniqueCategories);
     } catch (error) {
       console.error('Error al cargar productos:', error);
@@ -272,11 +274,8 @@ export default function DeliveryPersonsManagementPage() {
         paymentMethod: orderPaymentMethod,
         comments: orderComments.trim() || undefined,
         items: orderItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          subProducts: item.subProducts
+          productId: item.id,
+          quantity: item.quantity
         }))
       };
 

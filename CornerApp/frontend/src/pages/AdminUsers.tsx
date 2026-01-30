@@ -9,7 +9,7 @@ import type { AdminUser, CreateAdminUserRequest, UpdateAdminUserRequest } from '
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -28,29 +28,53 @@ export default function AdminUsersPage() {
 
   const { showToast } = useToast();
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await api.getAdminUsers(searchTerm || undefined);
-      setUsers(response.data);
-    } catch (error) {
-      showToast('Error al cargar usuarios', 'error');
+      const searchParam = searchTerm.trim() || undefined;
+      const response = await api.getAdminUsers(searchParam);
+      
+      // Manejar diferentes estructuras de respuesta
+      let usersData: AdminUser[] = [];
+      if (Array.isArray(response)) {
+        // Si la respuesta es directamente un array
+        usersData = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        // Si la respuesta tiene estructura { data: [...], total: ... }
+        usersData = response.data;
+      } else if (response && typeof response === 'object') {
+        // Intentar extraer datos de cualquier estructura
+        usersData = (response as any).data || (response as any).users || [];
+      }
+      
+      console.log('Usuarios cargados:', usersData.length, usersData);
+      setUsers(usersData);
+    } catch (error: any) {
+      console.error('Error completo al cargar usuarios:', error);
+      console.error('Error response:', error?.response);
+      const errorMessage = error?.message || error?.response?.data?.error || 'Error al cargar usuarios';
+      showToast(errorMessage, 'error');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchTerm !== undefined) {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (searchTerm === '') {
+      // Si el término de búsqueda está vacío, cargar inmediatamente
+      loadData();
+    } else {
+      // Si hay un término de búsqueda, esperar 300ms antes de buscar
+      const timeoutId = setTimeout(() => {
         loadData();
-      }
-    }, 300);
-    return () => clearTimeout(timeoutId);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
   }, [searchTerm]);
 
   const openCreateModal = () => {
@@ -60,7 +84,7 @@ export default function AdminUsersPage() {
       email: '',
       password: '',
       name: '',
-      role: 'Employee',
+      role: 'Employee', // Employee = Mozo
     });
     setIsFormModalOpen(true);
   };
@@ -129,7 +153,12 @@ export default function AdminUsersPage() {
         showToast('Usuario creado correctamente');
       }
       setIsFormModalOpen(false);
-      await loadData();
+      // Resetear el término de búsqueda para mostrar todos los usuarios
+      setSearchTerm('');
+      // Pequeño delay para asegurar que el servidor haya procesado la creación
+      setTimeout(async () => {
+        await loadData();
+      }, 500);
     } catch (error: any) {
       console.error('Error completo al crear/actualizar usuario:', error);
       console.error('Error stack:', error?.stack);
@@ -191,7 +220,7 @@ export default function AdminUsersPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <Shield size={24} className="text-primary-500" />
-              Gestión de Usuarios Administradores
+              Gestión de Usuarios
             </h1>
             <p className="text-sm text-gray-500">{users.length} usuarios registrados</p>
           </div>
@@ -268,7 +297,7 @@ export default function AdminUsersPage() {
                           ? 'bg-purple-100 text-purple-700' 
                           : 'bg-blue-100 text-blue-700'
                       }`}>
-                        {user.role === 'Admin' ? 'Administrador' : 'Empleado'}
+                        {user.role === 'Admin' ? 'Administrador' : 'Mozo'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{formatDate(user.createdAt)}</td>
@@ -360,13 +389,13 @@ export default function AdminUsersPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               required
             >
-              <option value="Employee">Empleado</option>
+              <option value="Employee">Mozo</option>
               <option value="Admin">Administrador</option>
             </select>
             <p className="mt-1 text-xs text-gray-500">
               {formData.role === 'Admin' 
-                ? 'Los administradores pueden crear usuarios y abrir/cerrar caja'
-                : 'Los empleados pueden vender si hay una caja abierta'}
+                ? 'Los administradores tienen acceso completo al sistema: pueden crear usuarios, abrir/cerrar caja y gestionar todo'
+                : 'Los mozos pueden iniciar sesión en la aplicación de mesas para tomar pedidos y gestionar mesas'}
             </p>
           </div>
 

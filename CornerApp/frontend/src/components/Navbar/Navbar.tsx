@@ -60,11 +60,11 @@ const navItems: NavItem[] = [
     subItems: [
       { path: '/admin/tables', label: 'Mesas', icon: TableIcon },
       { path: '/admin/settings/business', label: 'Datos del Negocio', icon: Store },
-      { path: '/admin/settings/delivery-zones', label: 'Zonas de Entrega', icon: MapPin },
+      // { path: '/admin/settings/delivery-zones', label: 'Zonas de Entrega', icon: MapPin }, // Temporalmente deshabilitado
       { path: '/admin/products', label: 'Productos', icon: Package },
       { path: '/admin/categories', label: 'Categorías', icon: FolderOpen },
       { path: '/admin/customers', label: 'Clientes', icon: Users },
-      { path: '/admin/users', label: 'Usuarios Admin', icon: Shield },
+      { path: '/admin/users', label: 'Usuarios', icon: Shield },
       { path: '/admin/settings/payments', label: 'Métodos de Pago', icon: CreditCard },
       { path: '/admin/settings/email', label: 'Configuración de Email', icon: Mail },
       { path: '/admin/settings/rewards', label: 'Premios', icon: Gift },
@@ -186,18 +186,25 @@ export default function Navbar() {
                         {item.subItems!.map((subItem) => {
                           const SubIcon = subItem.icon;
                           return (
-                            <Link
+                            <div
                               key={subItem.path}
-                              to={subItem.path}
-                              onClick={() => setOpenDropdown(null)}
-                              className={`flex items-center gap-3 px-4 py-2 text-sm transition-colors ${location.pathname === subItem.path
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setOpenDropdown(null);
+                                // Usar setTimeout para asegurar que el dropdown se cierre antes de navegar
+                                setTimeout(() => {
+                                  navigate(subItem.path);
+                                }, 0);
+                              }}
+                              className={`flex items-center gap-3 px-4 py-2 text-sm transition-colors cursor-pointer ${location.pathname === subItem.path
                                 ? 'bg-primary-50 text-primary-600 font-medium'
                                 : 'text-gray-700 hover:bg-gray-50'
                                 }`}
                             >
                               <SubIcon size={16} />
                               <span>{subItem.label}</span>
-                            </Link>
+                            </div>
                           );
                         })}
                       </div>
@@ -306,18 +313,25 @@ export default function Navbar() {
                       {item.subItems!.map((subItem) => {
                         const SubIcon = subItem.icon;
                         return (
-                          <Link
+                          <div
                             key={subItem.path}
-                            to={subItem.path}
-                            onClick={() => setOpenDropdown(null)}
-                            className={`flex items-center gap-2 px-3 py-2 text-xs transition-colors ${location.pathname === subItem.path
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setOpenDropdown(null);
+                              // Usar setTimeout para asegurar que el dropdown se cierre antes de navegar
+                              setTimeout(() => {
+                                navigate(subItem.path);
+                              }, 0);
+                            }}
+                            className={`flex items-center gap-2 px-3 py-2 text-xs transition-colors cursor-pointer ${location.pathname === subItem.path
                               ? 'bg-primary-50 text-primary-600 font-medium'
                               : 'text-gray-700 hover:bg-gray-50'
                               }`}
                           >
                             <SubIcon size={14} />
                             <span>{subItem.label}</span>
-                          </Link>
+                          </div>
                         );
                       })}
                     </div>

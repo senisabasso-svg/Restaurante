@@ -7,7 +7,8 @@ import {
   Trophy,
   ShoppingBag,
   DollarSign,
-  ArrowLeft
+  ArrowLeft,
+  Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -15,7 +16,7 @@ import { useToast } from '../components/Toast/ToastContext';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
 import Pagination from '../components/Pagination/Pagination';
-import type { Customer } from '../types';
+import type { Customer, CreateCustomerRequest } from '../types';
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -24,6 +25,16 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [formData, setFormData] = useState<CreateCustomerRequest>({
+    name: '',
+    phone: '',
+    email: '',
+    defaultAddress: '',
+    documentType: '',
+    documentNumber: ''
+  });
+  const [formLoading, setFormLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
   const [stats, setStats] = useState<{
@@ -45,11 +56,13 @@ export default function CustomersPage() {
         api.getCustomers({ search: searchTerm }),
         api.getCustomerStats(),
       ]);
-      setCustomers(customersData.data);
-      setStats(statsData);
+      setCustomers(customersData?.data || []);
+      setStats(statsData || null);
     } catch (error) {
       showToast('Error al cargar clientes', 'error');
       console.error(error);
+      setCustomers([]);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -83,11 +96,49 @@ export default function CustomersPage() {
     }
   };
 
+  const openCreateModal = () => {
+    setFormData({
+      name: '',
+      phone: '',
+      email: '',
+      defaultAddress: '',
+      documentType: '',
+      documentNumber: ''
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateCustomer = async () => {
+    if (!formData.name.trim() || !formData.phone.trim() || !formData.email.trim()) {
+      showToast('Nombre, teléfono y email son requeridos', 'error');
+      return;
+    }
+
+    try {
+      setFormLoading(true);
+      await api.createCustomer(formData);
+      showToast('Cliente creado exitosamente', 'success');
+      setIsCreateModalOpen(false);
+      setFormData({
+        name: '',
+        phone: '',
+        email: '',
+        defaultAddress: ''
+      });
+      loadData();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error al crear cliente';
+      showToast(errorMessage, 'error');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   // Paginación
-  const totalPages = Math.ceil(customers.length / itemsPerPage);
+  const totalPages = Math.ceil((customers?.length || 0) / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedCustomers = customers.slice(startIndex, endIndex);
+  const paginatedCustomers = (customers || []).slice(startIndex, endIndex);
 
   // Resetear página cuando cambia la búsqueda
   useEffect(() => {
@@ -106,17 +157,26 @@ export default function CustomersPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="bg-white rounded-xl shadow-md p-4">
-        <div className="flex items-center gap-3">
-          <Link 
-            to="/admin" 
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft size={20} className="text-gray-500" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-gray-800">👥 Registro de Clientes</h1>
-            <p className="text-sm text-gray-500">Consulta y gestiona los clientes registrados</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link 
+              to="/admin" 
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft size={20} className="text-gray-500" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">👥 Registro de Clientes</h1>
+              <p className="text-sm text-gray-500">Consulta y gestiona los clientes registrados</p>
+            </div>
           </div>
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+          >
+            <Plus size={20} />
+            Crear Cliente
+          </button>
         </div>
       </div>
 
@@ -162,7 +222,7 @@ export default function CustomersPage() {
               type="text"
               id="searchCustomers"
               name="searchCustomers"
-              placeholder="Buscar por nombre, teléfono, email o dirección..."
+              placeholder="Buscar por nombre, teléfono, email, dirección o número de documento..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -186,6 +246,7 @@ export default function CustomersPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold">Cliente</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold">Contacto</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">Documento</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold">Dirección</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold">Pedidos</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold">Total Gastado</th>
@@ -196,7 +257,7 @@ export default function CustomersPage() {
             <tbody className="divide-y divide-gray-200">
               {paginatedCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     <Users size={48} className="mx-auto mb-4 opacity-50" />
                     <p>No hay clientes registrados</p>
                   </td>
@@ -216,6 +277,16 @@ export default function CustomersPage() {
                       )}
                       {customer.email && (
                         <div className="text-sm text-gray-600">✉️ {customer.email}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {customer.documentType && customer.documentNumber ? (
+                        <div>
+                          <span className="font-medium">{customer.documentType}:</span>{' '}
+                          <span>{customer.documentNumber}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
@@ -292,6 +363,9 @@ export default function CustomersPage() {
                 {selectedCustomer.defaultAddress && (
                   <p><span className="text-gray-500">Dirección:</span> <span className="font-medium">{selectedCustomer.defaultAddress}</span></p>
                 )}
+                {selectedCustomer.documentType && selectedCustomer.documentNumber && (
+                  <p><span className="text-gray-500">Documento:</span> <span className="font-medium">{selectedCustomer.documentType} - {selectedCustomer.documentNumber}</span></p>
+                )}
               </div>
             </div>
 
@@ -340,6 +414,128 @@ export default function CustomersPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Create Customer Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setFormData({
+            name: '',
+            phone: '',
+            email: '',
+            defaultAddress: '',
+            documentType: '',
+            documentNumber: ''
+          });
+        }}
+        title="Crear Nuevo Cliente"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre *
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: Juan Pérez"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Teléfono *
+            </label>
+            <input
+              type="text"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: 099123456"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email *
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: juan@example.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Dirección
+            </label>
+            <input
+              type="text"
+              value={formData.defaultAddress}
+              onChange={(e) => setFormData({ ...formData, defaultAddress: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ej: Calle 123, Barrio Centro"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tipo de Documento
+              </label>
+              <select
+                value={formData.documentType || ''}
+                onChange={(e) => setFormData({ ...formData, documentType: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">Seleccionar...</option>
+                <option value="Cedula">Cédula</option>
+                <option value="Rut">RUT</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Número de Documento
+              </label>
+              <input
+                type="text"
+                value={formData.documentNumber || ''}
+                onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Ej: 12345678"
+                disabled={!formData.documentType}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <button
+              onClick={() => setIsCreateModalOpen(false)}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              disabled={formLoading}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCreateCustomer}
+              disabled={formLoading || !formData.name.trim() || !formData.phone.trim() || !formData.email.trim()}
+              className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {formLoading ? 'Creando...' : 'Crear Cliente'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
