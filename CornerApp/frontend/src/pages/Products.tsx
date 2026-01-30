@@ -169,24 +169,6 @@ export default function ProductsPage() {
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('La imagen es muy grande (máx 5MB)', 'error');
-      return;
-    }
-
-    try {
-      showToast('Subiendo imagen...', 'info');
-      const result = await api.uploadProductImage(file);
-      setFormData(prev => ({ ...prev, image: result.url }));
-      showToast('Imagen subida correctamente');
-    } catch (error) {
-      showToast('Error al subir imagen', 'error');
-    }
-  };
 
   // SubProducts management
   const openSubProductsModal = async (product: Product) => {
@@ -509,35 +491,20 @@ export default function ProductsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="productPrice" className="block text-sm font-medium text-gray-700 mb-1">Precio *</label>
-              <input
-                type="number"
-                id="productPrice"
-                name="productPrice"
-                value={formData.price}
-                onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="0.00"
-                step="0.01"
-                min="0.01"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="productDisplayOrder" className="block text-sm font-medium text-gray-700 mb-1">Orden</label>
-              <input
-                type="number"
-                id="productDisplayOrder"
-                name="productDisplayOrder"
-                value={formData.displayOrder}
-                onChange={(e) => setFormData(prev => ({ ...prev, displayOrder: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="0"
-                min="0"
-              />
-            </div>
+          <div>
+            <label htmlFor="productPrice" className="block text-sm font-medium text-gray-700 mb-1">Precio *</label>
+            <input
+              type="number"
+              id="productPrice"
+              name="productPrice"
+              value={formData.price}
+              onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="0.00"
+              step="0.01"
+              min="0.01"
+              required
+            />
           </div>
 
           <div>
@@ -555,32 +522,6 @@ export default function ProductsPage() {
                 <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label htmlFor="productImageFile" className="block text-sm font-medium text-gray-700 mb-1">Imagen</label>
-            <div className="space-y-2">
-              <input
-                type="file"
-                id="productImageFile"
-                name="productImageFile"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-              <input
-                type="text"
-                id="productImageUrl"
-                name="productImageUrl"
-                value={formData.image}
-                onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="O ingresa una URL de imagen"
-              />
-              {formData.image && (
-                <img src={formData.image} alt="Preview" className="w-24 h-24 object-cover rounded-lg" />
-              )}
-            </div>
           </div>
 
           <div>
