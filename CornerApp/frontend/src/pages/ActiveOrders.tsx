@@ -1391,6 +1391,16 @@ function OrderCard({
                   <PackageCheck size={16} />
                   Entregado
                 </button>
+              ) : order.deliveryPersonId ? (
+                /* Si ya tiene repartidor asignado, permitir enviar directamente */
+                <button
+                  onClick={() => onStatusChange(order, 'delivering', order.deliveryPersonId)}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm font-medium"
+                  title="Enviar pedido al repartidor asignado"
+                >
+                  <Truck size={16} />
+                  Enviar
+                </button>
               ) : (
                 <button
                   onClick={onAssign}
@@ -1495,6 +1505,11 @@ function TableActions({
           {order.tableId ? (
             <button onClick={() => onStatusChange(order, 'delivered')} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="Entregado a la mesa (listo para cobrar)">
               <PackageCheck size={16} />
+            </button>
+          ) : order.deliveryPersonId ? (
+            /* Si ya tiene repartidor asignado, permitir enviar directamente */
+            <button onClick={() => onStatusChange(order, 'delivering', order.deliveryPersonId)} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Enviar pedido al repartidor asignado">
+              <Truck size={16} />
             </button>
           ) : (
             <button onClick={onAssign} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Asignar repartidor y enviar">

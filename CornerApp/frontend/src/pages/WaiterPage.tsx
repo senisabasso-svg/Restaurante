@@ -125,8 +125,8 @@ export default function WaiterPage() {
   };
 
   const handleTableClick = async (table: Table) => {
-    // Solo permitir crear pedidos en mesas disponibles
-    if (table.status === 'Available') {
+    // Permitir crear pedidos en mesas disponibles u ocupadas (para agregar más pedidos)
+    if (table.status === 'Available' || table.status === 'Occupied' || table.status === 'OrderPlaced') {
       await openCreateOrderModal(table);
     } else {
       showToast('Esta mesa no está disponible para crear pedidos', 'info');
@@ -160,9 +160,28 @@ export default function WaiterPage() {
       });
       
       showToast(`Pedido #${response.id} creado exitosamente desde ${tableForOrder.number}`, 'success');
-      setIsCreateOrderModalOpen(false);
-      setTableForOrder(null);
+      
+      // No cerrar el modal automáticamente, permitir crear más pedidos
+      // Solo resetear los items del pedido
+      setOrderItems([]);
+      setSelectedProductId(null);
+      setSelectedCategoryId(null);
+      setProductQuantity(1);
+      setProductSubProducts([]);
+      setSelectedSubProducts([]);
+      setOrderComments('');
+      
+      // Recargar datos para actualizar el estado de la mesa
       await loadData();
+      
+      // Si la respuesta incluye la mesa actualizada, actualizar el estado local
+      if (response.table) {
+        setTables(prevTables => 
+          prevTables.map(t => t.id === response.table.id ? response.table : t)
+        );
+        // Actualizar tableForOrder con la mesa actualizada
+        setTableForOrder(response.table);
+      }
     } catch (error: any) {
       showToast(error.message || 'Error al crear el pedido', 'error');
     } finally {
@@ -321,7 +340,7 @@ export default function WaiterPage() {
               ) : (
                 filteredTables.map((table) => {
                   const statusInfo = getStatusInfo(table.status);
-                  const isAvailable = table.status === 'Available';
+                  const isAvailable = table.status === 'Available' || table.status === 'Occupied' || table.status === 'OrderPlaced';
                   const getFixedPosition = (id: number, axis: 'x' | 'y') => {
                     const seed = id * (axis === 'x' ? 7919 : 7907);
                     const random = (seed % 1000) / 1000;
@@ -500,7 +519,7 @@ export default function WaiterPage() {
             ) : (
               filteredTables.map((table) => {
                 const statusInfo = getStatusInfo(table.status);
-                const isAvailable = table.status === 'Available';
+                const isAvailable = table.status === 'Available' || table.status === 'Occupied' || table.status === 'OrderPlaced';
                 const tableSpace = table.spaceId ? spaces.find(s => s.id === table.spaceId) : null;
                 
                 return (

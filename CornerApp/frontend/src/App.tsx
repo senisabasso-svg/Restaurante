@@ -62,8 +62,8 @@ export default function App() {
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/reports" element={<ReportsPage />} />
         {/* Settings sub-routes */}
-        <Route path="/admin/settings" element={<Navigate to="/admin/settings/business" replace />} />
-        <Route path="/admin/settings/business" element={<SettingsBusinessPage />} />
+        <Route path="/admin/settings" element={<Navigate to="/admin/settings/info" replace />} />
+        {/* <Route path="/admin/settings/business" element={<SettingsBusinessPage />} /> */} {/* Temporalmente deshabilitado */}
         {/* <Route path="/admin/settings/delivery-zones" element={<SettingsDeliveryZonesPage />} /> */} {/* Temporalmente deshabilitado */}
         <Route path="/admin/settings/info" element={<SettingsInfoPage />} />
         <Route path="/admin/settings/payments" element={<SettingsPaymentsPage />} />
@@ -88,7 +88,7 @@ export default function App() {
         element={
           <ErrorBoundary>
             <WaiterProtectedRoute>
-              <WaiterPage />
+              <TablesViewPage />
             </WaiterProtectedRoute>
           </ErrorBoundary>
         }

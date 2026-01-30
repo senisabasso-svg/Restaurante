@@ -93,7 +93,9 @@ export default function CategoriesPage() {
         showToast('Categoría creada correctamente');
       }
       setIsFormModalOpen(false);
-      loadData();
+      // Pequeño delay para asegurar que el servidor haya procesado la creación
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await loadData();
     } catch (error) {
       showToast(editingCategory ? 'Error al actualizar categoría' : 'Error al crear categoría', 'error');
     } finally {

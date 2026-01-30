@@ -26,8 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Cargar token y usuario del localStorage al iniciar
-    const savedToken = localStorage.getItem('admin_token');
-    const savedUser = localStorage.getItem('admin_user');
+    // Buscar primero admin_token, luego waiter_token
+    const savedToken = localStorage.getItem('admin_token') || localStorage.getItem('waiter_token');
+    const savedUser = localStorage.getItem('admin_user') || localStorage.getItem('waiter_user');
     
     if (savedToken && savedUser) {
       setToken(savedToken);
@@ -37,6 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('Error al parsear usuario guardado:', e);
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
+        localStorage.removeItem('waiter_token');
+        localStorage.removeItem('waiter_user');
       }
     }
     setLoading(false);
@@ -75,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
+    localStorage.removeItem('waiter_token');
+    localStorage.removeItem('waiter_user');
   };
 
   return (

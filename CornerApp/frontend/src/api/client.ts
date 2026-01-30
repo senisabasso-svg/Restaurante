@@ -22,8 +22,8 @@ class ApiClient {
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {}, skipAuth = false } = options;
 
-    // Obtener token del localStorage (admin o repartidor) solo si no se omite la autenticación
-    const token = skipAuth ? null : (localStorage.getItem('admin_token') || localStorage.getItem('delivery_token'));
+    // Obtener token del localStorage (admin, mozo o repartidor) solo si no se omite la autenticación
+    const token = skipAuth ? null : (localStorage.getItem('admin_token') || localStorage.getItem('waiter_token') || localStorage.getItem('delivery_token'));
 
     const config: RequestInit = {
       method,
@@ -44,11 +44,20 @@ class ApiClient {
       // Si es 401 (No autorizado), limpiar tokens y redirigir al login apropiado
       if (response.status === 401) {
         const isDeliveryRoute = endpoint.includes('/deliveryperson/') || endpoint.includes('/delivery/');
+        const isWaiterRoute = endpoint.includes('/waiter/') || window.location.pathname.includes('/mozo');
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
+        localStorage.removeItem('waiter_token');
+        localStorage.removeItem('waiter_user');
         localStorage.removeItem('delivery_token');
         localStorage.removeItem('delivery_user');
-        window.location.href = isDeliveryRoute ? '/delivery/login' : '/login';
+        if (isDeliveryRoute) {
+          window.location.href = '/delivery/login';
+        } else if (isWaiterRoute) {
+          window.location.href = '/mozo/login';
+        } else {
+          window.location.href = '/login';
+        }
         throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
       }
 

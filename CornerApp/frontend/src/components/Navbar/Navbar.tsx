@@ -59,7 +59,7 @@ const navItems: NavItem[] = [
     icon: Settings,
     subItems: [
       { path: '/admin/tables', label: 'Mesas', icon: TableIcon },
-      { path: '/admin/settings/business', label: 'Datos del Negocio', icon: Store },
+      // { path: '/admin/settings/business', label: 'Datos del Negocio', icon: Store }, // Temporalmente deshabilitado
       // { path: '/admin/settings/delivery-zones', label: 'Zonas de Entrega', icon: MapPin }, // Temporalmente deshabilitado
       { path: '/admin/products', label: 'Productos', icon: Package },
       { path: '/admin/categories', label: 'Categorías', icon: FolderOpen },

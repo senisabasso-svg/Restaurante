@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { useToast } from '../components/Toast/ToastContext';
 import Modal from '../components/Modal/Modal';
 import ConfirmModal from '../components/Modal/ConfirmModal';
-import type { DeliveryPerson, Product, PaymentMethod, Order, Category, SubProduct, CreateOrderRequest } from '../types';
+import type { DeliveryPerson, Product, PaymentMethod, Order, Category, SubProduct, CreateOrderRequest, Customer } from '../types';
 
 export default function DeliveryPersonsManagementPage() {
   const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
@@ -24,6 +24,7 @@ export default function DeliveryPersonsManagementPage() {
   const [deliveryPersonOrders, setDeliveryPersonOrders] = useState<Order[]>([]);
   const [cashRegisterMovements, setCashRegisterMovements] = useState<any>(null);
   const [isMovementsModalOpen, setIsMovementsModalOpen] = useState(false);
+  const [orderFilter, setOrderFilter] = useState<'all' | 'preparing' | 'delivering' | 'completed' | 'cancelled'>('all');
   
   // Order creation state
   const [products, setProducts] = useState<Product[]>([]);
@@ -42,6 +43,12 @@ export default function DeliveryPersonsManagementPage() {
   const [orderCustomerPhone, setOrderCustomerPhone] = useState<string>('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [selectedDeliveryPersonForOrder, setSelectedDeliveryPersonForOrder] = useState<number | null>(null);
+  
+  // Customer search state
+  const [customerSearchTerm, setCustomerSearchTerm] = useState<string>('');
+  const [foundCustomers, setFoundCustomers] = useState<Customer[]>([]);
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const { showToast } = useToast();
 
@@ -83,10 +90,23 @@ export default function DeliveryPersonsManagementPage() {
       ]);
       setProducts(productsData);
       
-      // Cargar categorías únicas de los productos
-      const productCategoryIds = new Set(productsData.map(p => p.categoryId));
-      const uniqueCategories = categoriesData.filter(cat => productCategoryIds.has(cat.id));
-      setCategories(uniqueCategories);
+      // Cargar todas las categorías activas (no solo las que tienen productos)
+      const validCategories = Array.isArray(categoriesData) 
+        ? categoriesData
+            .filter(cat => cat && typeof cat === 'object' && 'id' in cat && 'name' in cat)
+            .map(cat => ({
+              id: Number(cat.id),
+              name: String(cat.name || '').trim(),
+              description: cat.description ? String(cat.description).trim() : undefined,
+              icon: cat.icon ? String(cat.icon).trim() : undefined,
+              displayOrder: Number(cat.displayOrder || 0),
+              isActive: Boolean(cat.isActive !== false),
+              createdAt: cat.createdAt ? String(cat.createdAt) : new Date().toISOString(),
+            }))
+            .filter(cat => cat.isActive && cat.name)
+            .sort((a, b) => a.displayOrder - b.displayOrder)
+        : [];
+      setCategories(validCategories);
     } catch (error) {
       console.error('Error al cargar productos:', error);
     }
@@ -99,6 +119,43 @@ export default function DeliveryPersonsManagementPage() {
     } catch (error) {
       console.error('Error al cargar métodos de pago:', error);
     }
+  };
+
+  const searchCustomers = async (searchTerm: string) => {
+    if (!searchTerm.trim() || searchTerm.length < 2) {
+      setFoundCustomers([]);
+      return;
+    }
+
+    try {
+      setIsSearchingCustomers(true);
+      const response = await api.getCustomers({ search: searchTerm, pageSize: 10 });
+      const customers = response?.data || [];
+      setFoundCustomers(customers);
+    } catch (error) {
+      console.error('Error al buscar clientes:', error);
+      setFoundCustomers([]);
+    } finally {
+      setIsSearchingCustomers(false);
+    }
+  };
+
+  const handleCustomerSelect = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setOrderCustomerName(customer.name);
+    setOrderCustomerAddress(customer.defaultAddress || '');
+    setOrderCustomerPhone(customer.phone || '');
+    setCustomerSearchTerm('');
+    setFoundCustomers([]);
+  };
+
+  const handleClearCustomer = () => {
+    setSelectedCustomer(null);
+    setOrderCustomerName('');
+    setOrderCustomerAddress('');
+    setOrderCustomerPhone('');
+    setCustomerSearchTerm('');
+    setFoundCustomers([]);
   };
 
   const handleOpenCashRegisterClick = (deliveryPersonId: number) => {
@@ -184,55 +241,42 @@ export default function DeliveryPersonsManagementPage() {
     const product = products.find(p => p.id === selectedProductId);
     if (!product) return;
 
-    const subProductsData = selectedSubProducts
-      .map(id => productSubProducts.find(sp => sp.id === id))
-      .filter((sp): sp is SubProduct => sp !== undefined);
-
-    const subtotal = (product.price * productQuantity) + 
-      subProductsData.reduce((sum, sp) => sum + sp.price, 0);
-
-    const existingIndex = orderItems.findIndex(item => 
-      item.id === product.id && 
-      JSON.stringify(item.subProducts?.map(sp => sp.id).sort()) === JSON.stringify(selectedSubProducts.sort())
-    );
-
-    if (existingIndex >= 0) {
-      const updated = [...orderItems];
-      updated[existingIndex].quantity += productQuantity;
-      updated[existingIndex].subProducts = subProductsData;
-      setOrderItems(updated);
-    } else {
-      setOrderItems([...orderItems, {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        quantity: productQuantity,
-        subProducts: subProductsData.length > 0 ? subProductsData.map(sp => ({
-          id: sp.id,
-          name: sp.name,
-          price: sp.price
-        })) : undefined
-      }]);
-    }
-
+    const selectedSubs = productSubProducts.filter(sp => selectedSubProducts.includes(sp.id));
+    const subProductsTotal = selectedSubs.reduce((sum, sp) => sum + sp.price, 0);
+    
+    setOrderItems([...orderItems, {
+      id: product.id,
+      name: product.name,
+      price: product.price + subProductsTotal,
+      quantity: productQuantity,
+      subProducts: selectedSubs.length > 0 ? selectedSubs.map(sp => ({
+        id: sp.id,
+        name: sp.name,
+        price: sp.price
+      })) : undefined
+    }]);
+    
     setSelectedProductId(null);
     setProductQuantity(1);
     setSelectedSubProducts([]);
+    setProductSubProducts([]);
   };
 
   const handleRemoveItem = (index: number) => {
     setOrderItems(orderItems.filter((_, i) => i !== index));
   };
 
-  const handleProductSelect = (productId: number) => {
+  const handleProductSelect = async (productId: number) => {
     setSelectedProductId(productId);
-    const product = products.find(p => p.id === productId);
-    if (product && product.subProducts) {
-      setProductSubProducts(product.subProducts);
-    } else {
+    setProductQuantity(1);
+    setSelectedSubProducts([]);
+    try {
+      const subProducts = await api.getSubProductsByProduct(productId);
+      setProductSubProducts(subProducts.filter(sp => sp.isAvailable));
+    } catch (error) {
+      console.error('Error loading subproducts:', error);
       setProductSubProducts([]);
     }
-    setSelectedSubProducts([]);
   };
 
   const calculateTotal = () => {
@@ -273,10 +317,20 @@ export default function DeliveryPersonsManagementPage() {
         customerPhone: orderCustomerPhone.trim() || undefined,
         paymentMethod: orderPaymentMethod,
         comments: orderComments.trim() || undefined,
-        items: orderItems.map(item => ({
-          productId: item.id,
-          quantity: item.quantity
-        }))
+        items: orderItems.map(item => {
+          const product = products.find(p => p.id === item.id);
+          return {
+            id: item.id,
+            name: product?.name || item.name,
+            price: item.price,
+            quantity: item.quantity,
+            subProducts: item.subProducts?.map(sp => ({
+              id: sp.id,
+              name: sp.name,
+              price: sp.price
+            }))
+          };
+        })
       };
 
       const order = await api.createOrder(orderData);
@@ -293,6 +347,14 @@ export default function DeliveryPersonsManagementPage() {
       setOrderPaymentMethod('cash');
       setOrderComments('');
       setSelectedDeliveryPersonForOrder(null);
+      setSelectedCustomer(null);
+      setCustomerSearchTerm('');
+      setFoundCustomers([]);
+      setSelectedCategoryId(null);
+      setSelectedProductId(null);
+      setProductSubProducts([]);
+      setSelectedSubProducts([]);
+      setProductQuantity(1);
       
       // Recargar datos
       await loadData();
@@ -501,11 +563,116 @@ export default function DeliveryPersonsManagementPage() {
           setOrderPaymentMethod('cash');
           setOrderComments('');
           setSelectedDeliveryPersonForOrder(null);
+          setSelectedCustomer(null);
+          setCustomerSearchTerm('');
+          setFoundCustomers([]);
+          setSelectedCategoryId(null);
+          setSelectedProductId(null);
+          setProductSubProducts([]);
+          setSelectedSubProducts([]);
+          setProductQuantity(1);
         }}
         title="Crear Pedido de Delivery"
       >
         <div className="space-y-4">
-          {/* Cliente */}
+          {/* Búsqueda de Cliente */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Buscar Cliente (por nombre, teléfono o documento)
+            </label>
+            <div className="relative">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    value={customerSearchTerm}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCustomerSearchTerm(value);
+                      if (value.length >= 2) {
+                        searchCustomers(value);
+                      } else {
+                        setFoundCustomers([]);
+                      }
+                    }}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Buscar por nombre, teléfono o documento..."
+                    disabled={!!selectedCustomer}
+                  />
+                  {selectedCustomer && (
+                    <button
+                      onClick={handleClearCustomer}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Lista de clientes encontrados */}
+              {isSearchingCustomers && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 text-center text-gray-500">
+                  Buscando clientes...
+                </div>
+              )}
+              {foundCustomers.length > 0 && !selectedCustomer && !isSearchingCustomers && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {foundCustomers.map((customer) => (
+                    <div
+                      key={customer.id}
+                      onClick={() => handleCustomerSelect(customer)}
+                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-gray-800">{customer.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {customer.phone && <span>📱 {customer.phone}</span>}
+                        {customer.documentNumber && (
+                          <span className="ml-2">
+                            {customer.documentType}: {customer.documentNumber}
+                          </span>
+                        )}
+                      </div>
+                      {customer.defaultAddress && (
+                        <div className="text-xs text-gray-500 mt-1">📍 {customer.defaultAddress}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Cliente seleccionado */}
+              {selectedCustomer && (
+                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-green-800">{selectedCustomer.name}</div>
+                      <div className="text-sm text-green-600 mt-1">
+                        {selectedCustomer.phone && <span>📱 {selectedCustomer.phone}</span>}
+                        {selectedCustomer.documentNumber && (
+                          <span className="ml-2">
+                            {selectedCustomer.documentType}: {selectedCustomer.documentNumber}
+                          </span>
+                        )}
+                      </div>
+                      {selectedCustomer.defaultAddress && (
+                        <div className="text-xs text-green-600 mt-1">📍 {selectedCustomer.defaultAddress}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleClearCustomer}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cliente - Campos manuales */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
               Nombre del Cliente *
@@ -516,6 +683,7 @@ export default function DeliveryPersonsManagementPage() {
               onChange={(e) => setOrderCustomerName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="Ej: Juan Pérez"
+              disabled={!!selectedCustomer}
             />
           </div>
 
@@ -546,82 +714,179 @@ export default function DeliveryPersonsManagementPage() {
           </div>
 
           {/* Productos */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Agregar Producto
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={selectedCategoryId || ''}
-                onChange={(e) => {
-                  setSelectedCategoryId(e.target.value ? parseInt(e.target.value) : null);
-                  setSelectedProductId(null);
-                }}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">Todas las categorías</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              <select
-                value={selectedProductId || ''}
-                onChange={(e) => handleProductSelect(parseInt(e.target.value))}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">Seleccionar producto</option>
-                {products
-                  .filter(p => !selectedCategoryId || p.categoryId === selectedCategoryId)
-                  .map(product => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} - ${product.price.toFixed(2)}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            {selectedProductId && productSubProducts.length > 0 && (
-              <div className="mt-2 space-y-2">
-                <label className="block text-xs font-medium text-gray-600">
-                  Guarniciones (opcional)
+          <div className="space-y-3">
+            {!selectedCategoryId ? (
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Selecciona una Categoría
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {productSubProducts.map(sp => (
-                    <label key={sp.id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedSubProducts.includes(sp.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedSubProducts([...selectedSubProducts, sp.id]);
-                          } else {
-                            setSelectedSubProducts(selectedSubProducts.filter(id => id !== sp.id));
-                          }
-                        }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{sp.name} (+${sp.price.toFixed(2)})</span>
-                    </label>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                  {categories
+                    .filter(cat => cat && typeof cat === 'object' && 'id' in cat && 'name' in cat)
+                    .map((category) => (
+                      <button
+                        key={category.id}
+                        onClick={() => setSelectedCategoryId(category.id)}
+                        className="flex flex-col items-center justify-center p-4 border-2 border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-all"
+                      >
+                        {category.icon && category.icon.startsWith('/') ? (
+                          <img 
+                            src={category.icon} 
+                            alt={category.name}
+                            className="w-12 h-12 object-contain mb-2"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              const fallback = document.createElement('span');
+                              fallback.className = 'text-3xl mb-2';
+                              fallback.textContent = '📦';
+                              target.parentNode?.replaceChild(fallback, target);
+                            }}
+                          />
+                        ) : (
+                          <span className="text-3xl mb-2">{category.icon || '📦'}</span>
+                        )}
+                        <span className="text-sm font-medium text-gray-700 text-center">
+                          {String(category.name || '').trim() || 'Sin nombre'}
+                        </span>
+                      </button>
+                    ))}
                 </div>
               </div>
-            )}
+            ) : (
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setSelectedCategoryId(null);
+                    setSelectedProductId(null);
+                    setProductSubProducts([]);
+                    setSelectedSubProducts([]);
+                  }}
+                  className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  ← Volver a Categorías
+                </button>
 
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min="1"
-                value={productQuantity}
-                onChange={(e) => setProductQuantity(parseInt(e.target.value) || 1)}
-                className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleAddProductToOrder}
-                className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
-              >
-                Agregar
-              </button>
-            </div>
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  {(() => {
+                    const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+                    const icon = selectedCategory?.icon;
+                    return icon && icon.startsWith('/') ? (
+                      <img 
+                        src={icon} 
+                        alt={selectedCategory?.name || 'Categoría'}
+                        className="w-8 h-8 object-contain"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const fallback = document.createElement('span');
+                          fallback.className = 'text-2xl';
+                          fallback.textContent = '📦';
+                          target.parentNode?.replaceChild(fallback, target);
+                        }}
+                      />
+                    ) : (
+                      <span className="text-2xl">{icon || '📦'}</span>
+                    );
+                  })()}
+                  <span className="text-lg font-semibold text-gray-800">
+                    {categories.find(c => c.id === selectedCategoryId)?.name}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Selecciona un Producto
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                    {products
+                      .filter(p => p.categoryId === selectedCategoryId && p.isAvailable)
+                      .map((product) => (
+                        <button
+                          key={product.id}
+                          onClick={() => handleProductSelect(product.id)}
+                          className={`p-3 border-2 rounded-lg text-left transition-all ${
+                            selectedProductId === product.id
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="font-medium text-gray-800">{product.name}</div>
+                          {product.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                              {product.description}
+                            </div>
+                          )}
+                          <div className="text-sm font-bold text-primary-600 mt-2">
+                            ${product.price.toFixed(2)}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+
+                  {products.filter(p => p.categoryId === selectedCategoryId && p.isAvailable).length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      No hay productos disponibles en esta categoría
+                    </div>
+                  )}
+                </div>
+
+                {selectedProductId && productSubProducts.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Guarniciones (opcional)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                      {productSubProducts.map((subProduct) => (
+                        <label
+                          key={subProduct.id}
+                          className="flex items-center gap-2 p-2 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedSubProducts.includes(subProduct.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSubProducts([...selectedSubProducts, subProduct.id]);
+                              } else {
+                                setSelectedSubProducts(selectedSubProducts.filter(id => id !== subProduct.id));
+                              }
+                            }}
+                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-800">{subProduct.name}</div>
+                            <div className="text-xs text-primary-600">+${subProduct.price.toFixed(2)}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedProductId && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm font-medium text-gray-700">Cantidad:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={productQuantity}
+                        onChange={(e) => setProductQuantity(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                    </div>
+                    <button
+                      onClick={handleAddProductToOrder}
+                      className="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ShoppingCart size={18} />
+                      Agregar al Pedido
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Items del pedido */}
@@ -719,6 +984,7 @@ export default function DeliveryPersonsManagementPage() {
           setIsDetailsModalOpen(false);
           setSelectedDeliveryPerson(null);
           setDeliveryPersonOrders([]);
+          setOrderFilter('all');
         }}
         title={`Repartidor: ${selectedDeliveryPerson?.name}`}
       >
@@ -731,46 +997,160 @@ export default function DeliveryPersonsManagementPage() {
               <p><strong>Usuario:</strong> {selectedDeliveryPerson.username || 'N/A'}</p>
             </div>
 
+            {/* Estadísticas de la sesión */}
+            {cashRegisterStatuses[selectedDeliveryPerson.id]?.isOpen && (
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h4 className="font-medium mb-3 text-blue-900">Estadísticas de la Sesión</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-blue-700">Total Pedidos</p>
+                    <p className="text-2xl font-bold text-blue-900">{deliveryPersonOrders.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-700">Total Cobrado</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      ${deliveryPersonOrders
+                        .filter(o => o.status === 'completed' || o.status === 'delivered')
+                        .reduce((sum, o) => sum + o.total, 0)
+                        .toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-700">En Preparación</p>
+                    <p className="text-xl font-semibold text-orange-600">
+                      {deliveryPersonOrders.filter(o => o.status === 'preparing').length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-700">En Camino</p>
+                    <p className="text-xl font-semibold text-purple-600">
+                      {deliveryPersonOrders.filter(o => o.status === 'delivering').length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filtros de pedidos */}
             <div>
-              <h4 className="font-medium mb-2">
-                Pedidos {cashRegisterStatuses[selectedDeliveryPerson.id]?.isOpen ? 'de esta sesión' : 'Asignados'}
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-medium">
+                  Pedidos {cashRegisterStatuses[selectedDeliveryPerson.id]?.isOpen ? 'de esta sesión' : 'Asignados'}
+                </h4>
                 {deliveryPersonOrders.length > 0 && (
-                  <span className="text-sm text-gray-500 font-normal ml-2">
-                    ({deliveryPersonOrders.length} pedido{deliveryPersonOrders.length !== 1 ? 's' : ''})
-                  </span>
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {(['all', 'preparing', 'delivering', 'completed', 'cancelled'] as const).map(filter => (
+                      <button
+                        key={filter}
+                        onClick={() => setOrderFilter(filter)}
+                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                          orderFilter === filter
+                            ? 'bg-primary-500 text-white'
+                            : 'text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {filter === 'all' ? 'Todos' :
+                         filter === 'preparing' ? 'Preparando' :
+                         filter === 'delivering' ? 'En Camino' :
+                         filter === 'completed' ? 'Completados' :
+                         'Cancelados'}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </h4>
+              </div>
+              
               {deliveryPersonOrders.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">No hay pedidos asignados</p>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {deliveryPersonOrders.map(order => (
-                    <div key={order.id} className="border rounded-lg p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium">Pedido #{order.id}</p>
-                          <p className="text-sm text-gray-600">{order.customerName}</p>
-                          <p className="text-xs text-gray-500">{order.customerAddress}</p>
+              ) : (() => {
+                const filteredOrders = orderFilter === 'all' 
+                  ? deliveryPersonOrders 
+                  : deliveryPersonOrders.filter(o => o.status === orderFilter);
+                
+                if (filteredOrders.length === 0) {
+                  return <p className="text-gray-500 text-center py-4">No hay pedidos con este estado</p>;
+                }
+
+                // Agrupar por estado
+                const ordersByStatus = filteredOrders.reduce((acc, order) => {
+                  if (!acc[order.status]) acc[order.status] = [];
+                  acc[order.status].push(order);
+                  return acc;
+                }, {} as Record<string, Order[]>);
+
+                return (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {Object.entries(ordersByStatus).map(([status, orders]) => (
+                      <div key={status} className="border rounded-lg p-3">
+                        <h5 className="font-medium mb-2 text-sm text-gray-700">
+                          {status === 'preparing' ? '🟠 Preparando' :
+                           status === 'delivering' ? '🟣 En Camino' :
+                           status === 'completed' ? '✅ Completados' :
+                           status === 'delivered' ? '✅ Entregados' :
+                           '❌ Cancelados'} ({orders.length})
+                        </h5>
+                        <div className="space-y-2">
+                          {orders.map(order => (
+                            <div key={order.id} className="bg-gray-50 rounded p-3 border border-gray-200">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">Pedido #{order.id}</p>
+                                  <p className="text-sm text-gray-700 mt-1">
+                                    <strong>Cliente:</strong> {order.customerName}
+                                  </p>
+                                  {order.customerPhone && (
+                                    <p className="text-xs text-gray-600">
+                                      📱 {order.customerPhone}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    📍 {order.customerAddress}
+                                  </p>
+                                  {order.paymentMethod && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      💳 {order.paymentMethod}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-bold text-green-600">
+                                    ${order.total.toFixed(2)}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {new Date(order.createdAt).toLocaleTimeString('es-ES', { 
+                                      hour: '2-digit', 
+                                      minute: '2-digit' 
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                              {order.items && order.items.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                  <p className="text-xs font-medium text-gray-700 mb-1">Productos:</p>
+                                  <div className="space-y-1">
+                                    {order.items.map((item, idx) => (
+                                      <div key={idx} className="text-xs text-gray-600">
+                                        {item.quantity}x {item.productName} - ${item.subtotal.toFixed(2)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {order.comments && (
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                  <p className="text-xs text-gray-500">
+                                    <strong>Notas:</strong> {order.comments}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          order.status === 'preparing' ? 'bg-orange-100 text-orange-700' :
-                          order.status === 'delivering' ? 'bg-purple-100 text-purple-700' :
-                          order.status === 'completed' ? 'bg-green-100 text-green-700' :
-                          order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {order.status === 'preparing' ? 'Preparando' :
-                           order.status === 'delivering' ? 'En Camino' :
-                           order.status === 'completed' ? 'Completado' :
-                           order.status === 'cancelled' ? 'Cancelado' :
-                           order.status}
-                        </span>
                       </div>
-                      <p className="text-sm font-medium text-green-600 mt-2">${order.total.toFixed(2)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

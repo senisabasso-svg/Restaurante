@@ -55,7 +55,17 @@ export interface CreateOrderRequest {
   customerPhone?: string;
   paymentMethod: string;
   comments?: string;
-  items: { productId: number; quantity: number }[];
+  items: {
+    id: number;
+    name: string;
+    price: number;
+    quantity: number;
+    subProducts?: {
+      id: number;
+      name: string;
+      price: number;
+    }[];
+  }[];
 }
 
 // Product types

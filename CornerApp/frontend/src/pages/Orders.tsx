@@ -75,6 +75,9 @@ export default function OrdersPage() {
     comments: '',
     items: [],
   });
+  
+  // Estado temporal para items con productId (para facilitar la UI)
+  const [orderItemsWithProductId, setOrderItemsWithProductId] = useState<Array<{ productId: number; quantity: number }>>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [productQuantity, setProductQuantity] = useState(1);
   const [isCreating, setIsCreating] = useState(false);
@@ -1191,10 +1194,10 @@ export default function OrdersPage() {
                   if (selectedProductId) {
                     const product = products.find(p => p.id === selectedProductId);
                     if (product) {
-                      setNewOrder({
-                        ...newOrder,
-                        items: [...newOrder.items, { productId: selectedProductId, quantity: productQuantity }],
-                      });
+                      setOrderItemsWithProductId([
+                        ...orderItemsWithProductId,
+                        { productId: selectedProductId, quantity: productQuantity }
+                      ]);
                       setSelectedProductId(null);
                       setProductQuantity(1);
                     }
@@ -1209,13 +1212,13 @@ export default function OrdersPage() {
           </div>
 
           {/* Lista de productos agregados */}
-          {newOrder.items.length > 0 && (
+          {orderItemsWithProductId.length > 0 && (
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
                 Productos Agregados
               </label>
               <div className="border border-gray-200 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
-                {newOrder.items.map((item, index) => {
+                {orderItemsWithProductId.map((item, index) => {
                   const product = products.find(p => p.id === item.productId);
                   return product ? (
                     <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
@@ -1298,7 +1301,7 @@ export default function OrdersPage() {
                     customerPhone: newOrder.customerPhone || undefined,
                     paymentMethod: newOrder.paymentMethod,
                     comments: newOrder.comments || undefined,
-                    items: newOrder.items.map(item => {
+                    items: orderItemsWithProductId.map(item => {
                       const product = products.find(p => p.id === item.productId);
                       if (!product) {
                         throw new Error(`Producto con ID ${item.productId} no encontrado`);
@@ -1322,6 +1325,7 @@ export default function OrdersPage() {
                     comments: '',
                     items: [],
                   });
+                  setOrderItemsWithProductId([]);
                   setSelectedProductId(null);
                   setProductQuantity(1);
                   loadData();
