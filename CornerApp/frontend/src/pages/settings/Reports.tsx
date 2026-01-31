@@ -14,7 +14,9 @@ import {
   Users,
   Truck,
   FileSpreadsheet,
-  Award
+  Award,
+  RotateCcw,
+  AlertCircle
 } from 'lucide-react';
 import {
   LineChart,
@@ -186,6 +188,30 @@ export default function ReportsPage() {
       setIsCashRegisterMovementsModalOpen(false);
     } finally {
       setLoadingMovements(false);
+    }
+  };
+
+  const handlePOSVoid = async (order: any) => {
+    if (!order.posTransactionId && !order.posTransactionIdString) {
+      showToast('No hay información de transacción POS para este pedido', 'error');
+      return;
+    }
+
+    if (!confirm(`¿Está seguro que desea hacer la devolución de la transacción POS?\n\nPedido: #${order.id}\nMonto: $${order.total.toFixed(2)}\nTransaction ID: ${order.posTransactionId || order.posTransactionIdString}`)) {
+      return;
+    }
+
+    try {
+      // Usar el TransactionDateTime de la transacción original si está disponible
+      await api.sendPOSVoid(order.total, order.posTransactionDateTime);
+      showToast('Devolución POS procesada exitosamente', 'success');
+      // Recargar movimientos para actualizar la vista
+      if (cashRegisterMovements?.cashRegister?.id) {
+        const movements = await api.getCashRegisterMovements(cashRegisterMovements.cashRegister.id);
+        setCashRegisterMovements(movements);
+      }
+    } catch (error: any) {
+      showToast(`Error al procesar devolución POS: ${error.message}`, 'error');
     }
   };
 
@@ -905,7 +931,9 @@ export default function ReportsPage() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente/Mesa</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Info POS</th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -944,8 +972,55 @@ export default function ReportsPage() {
                                order.paymentMethod || '-'}
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-sm">
+                            {order.paymentMethod?.toLowerCase() === 'pos' && (order.posTransactionId || order.posTransactionIdString) ? (
+                              <div className="space-y-1">
+                                <div className="text-xs text-gray-600">
+                                  <span className="font-medium">ID:</span> {order.posTransactionId || order.posTransactionIdString}
+                                </div>
+                                {order.posTransactionDateTime && (
+                                  <div className="text-xs text-gray-500">
+                                    {(() => {
+                                      try {
+                                        // Formato: yyyyMMddHHmmssfff
+                                        const dt = order.posTransactionDateTime;
+                                        if (dt.length >= 14) {
+                                          const year = dt.substring(0, 4);
+                                          const month = dt.substring(4, 6);
+                                          const day = dt.substring(6, 8);
+                                          const hour = dt.substring(8, 10);
+                                          const minute = dt.substring(10, 12);
+                                          const second = dt.substring(12, 14);
+                                          return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+                                        }
+                                        return dt;
+                                      } catch {
+                                        return order.posTransactionDateTime;
+                                      }
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right text-sm font-bold text-gray-800">
                             {formatCurrency(order.total)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {order.paymentMethod?.toLowerCase() === 'pos' && (order.posTransactionId || order.posTransactionIdString) ? (
+                              <button
+                                onClick={() => handlePOSVoid(order)}
+                                className="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1.5 mx-auto"
+                                title="Hacer devolución de transacción POS"
+                              >
+                                <RotateCcw size={14} />
+                                Devolver
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
                           </td>
                         </tr>
                       ))}

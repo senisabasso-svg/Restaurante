@@ -616,6 +616,18 @@ namespace CornerApp.API.Migrations
                     b.Property<string>("TransferReceiptImage")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("POSTransactionDateTime")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("POSTransactionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("POSTransactionIdString")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("POSResponse")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 

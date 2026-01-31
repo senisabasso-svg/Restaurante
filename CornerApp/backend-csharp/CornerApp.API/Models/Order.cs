@@ -42,6 +42,12 @@ public class Order
     public string? MercadoPagoPreferenceId { get; set; }
     public string? MercadoPagoPaymentId { get; set; }
     
+    // Información de transacción POS
+    public long? POSTransactionId { get; set; }
+    public string? POSTransactionIdString { get; set; }
+    public string? POSTransactionDateTime { get; set; }
+    public string? POSResponse { get; set; } // Respuesta completa del POS para referencia
+    
     // Comprobante de transferencia (base64)
     public string? TransferReceiptImage { get; set; }
     public bool IsReceiptVerified { get; set; } = false; // Si el comprobante ha sido verificado

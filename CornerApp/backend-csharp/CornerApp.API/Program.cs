@@ -832,6 +832,43 @@ if (app.Environment.IsDevelopment())
                     END
                 ");
                 
+                // Aplicar migración de campos POS si no existen
+                try
+                {
+                    dbContext.Database.ExecuteSqlRaw(@"
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Orders]') AND name = 'POSTransactionId')
+                        BEGIN
+                            ALTER TABLE [dbo].[Orders] ADD [POSTransactionId] bigint NULL;
+                        END
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Orders]') AND name = 'POSTransactionIdString')
+                        BEGIN
+                            ALTER TABLE [dbo].[Orders] ADD [POSTransactionIdString] nvarchar(max) NULL;
+                        END
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Orders]') AND name = 'POSTransactionDateTime')
+                        BEGIN
+                            ALTER TABLE [dbo].[Orders] ADD [POSTransactionDateTime] nvarchar(max) NULL;
+                        END
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Orders]') AND name = 'POSResponse')
+                        BEGIN
+                            ALTER TABLE [dbo].[Orders] ADD [POSResponse] nvarchar(max) NULL;
+                        END
+                    ");
+                    
+                    // Registrar la migración si no está registrada
+                    dbContext.Database.ExecuteSqlRaw(@"
+                        IF NOT EXISTS (SELECT * FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = '20260115000000_AddPOSTransactionFieldsToOrder')
+                        BEGIN
+                            INSERT INTO [dbo].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+                            VALUES ('20260115000000_AddPOSTransactionFieldsToOrder', '8.0.0');
+                        END
+                    ");
+                    Log.Information("Migración de campos POS aplicada exitosamente");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Error al aplicar migración de campos POS (puede que ya esté aplicada)");
+                }
+                
                 // Registrar la migración si no está registrada
                 dbContext.Database.ExecuteSqlRaw(@"
                     IF NOT EXISTS (SELECT * FROM [dbo].[__EFMigrationsHistory] WHERE [MigrationId] = '20260106000000_AddSpaces')

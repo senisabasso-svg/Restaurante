@@ -251,11 +251,30 @@ class ApiClient {
     return this.request<{ success: boolean; message: string; order: Order }>(`/api/tables/orders/${orderId}/items/${itemId}`, { method: 'DELETE' });
   }
 
-  async processTablePayment(orderId: number, paymentMethod: string) {
+  async processTablePayment(
+    orderId: number, 
+    paymentMethod: string, 
+    posInfo?: { 
+      transactionId?: number; 
+      sTransactionId?: string; 
+      transactionDateTime?: string; 
+      response?: string 
+    }
+  ) {
     // Primero actualizar el método de pago del pedido
+    const paymentMethodBody: any = { paymentMethod };
+    
+    // Si es pago POS y hay información de transacción, incluirla
+    if (paymentMethod.toLowerCase() === 'pos' && posInfo) {
+      paymentMethodBody.POSTransactionId = posInfo.transactionId;
+      paymentMethodBody.POSTransactionIdString = posInfo.sTransactionId;
+      paymentMethodBody.POSTransactionDateTime = posInfo.transactionDateTime;
+      paymentMethodBody.POSResponse = posInfo.response;
+    }
+    
     await this.request<Order>(`/admin/api/orders/${orderId}/payment-method`, {
       method: 'PATCH',
-      body: { paymentMethod },
+      body: paymentMethodBody,
     });
     
     // Luego completar el pedido
@@ -290,10 +309,13 @@ class ApiClient {
     return response;
   }
 
-  async sendPOSVoid(amount: number) {
+  async sendPOSVoid(amount: number, transactionDateTime?: string) {
     return this.request<{ success: boolean; message: string; response?: string }>('/admin/api/pos/void', {
       method: 'POST',
-      body: { amount },
+      body: { 
+        amount,
+        transactionDateTime 
+      },
     });
   }
 

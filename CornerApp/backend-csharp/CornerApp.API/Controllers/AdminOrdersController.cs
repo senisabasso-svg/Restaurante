@@ -889,6 +889,18 @@ public class AdminOrdersController : ControllerBase
             order.PaymentMethod = paymentMethod.Name;
             order.UpdatedAt = DateTime.UtcNow;
 
+            // Si es pago POS, guardar información de la transacción
+            if (paymentMethod.Name.ToLower() == PaymentConstants.METHOD_POS.ToLower() && 
+                (request.POSTransactionId.HasValue || !string.IsNullOrWhiteSpace(request.POSTransactionIdString)))
+            {
+                order.POSTransactionId = request.POSTransactionId;
+                order.POSTransactionIdString = request.POSTransactionIdString;
+                order.POSTransactionDateTime = request.POSTransactionDateTime;
+                order.POSResponse = request.POSResponse;
+                _logger.LogInformation("Información POS guardada para pedido {OrderId}: TransactionId={TransactionId}", 
+                    id, request.POSTransactionId ?? (long.TryParse(request.POSTransactionIdString, out var parsed) ? parsed : 0));
+            }
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Método de pago del pedido {OrderId} actualizado a: {PaymentMethod}", id, paymentMethod.Name);
@@ -1207,9 +1219,18 @@ public class AdminOrdersController : ControllerBase
                 return BadRequest(new { error = "El monto debe ser mayor a 0" });
             }
 
-            // Formatear fecha como yyyyMMddHHmmssSSS
-            var now = DateTime.UtcNow;
-            var transactionDateTime = now.ToString("yyyyMMddHHmmssfff");
+            // Usar el TransactionDateTime de la transacción original si se proporciona, sino usar la fecha actual
+            string transactionDateTime;
+            if (!string.IsNullOrWhiteSpace(request.TransactionDateTime))
+            {
+                transactionDateTime = request.TransactionDateTime;
+            }
+            else
+            {
+                // Formatear fecha como yyyyMMddHHmmssSSS
+                var now = DateTime.UtcNow;
+                transactionDateTime = now.ToString("yyyyMMddHHmmssfff");
+            }
 
             // Convertir el monto: si es 1120, debe ser "112000" (multiplicar por 100)
             var amountFormatted = ((long)Math.Round(request.Amount * 100)).ToString();
@@ -1464,6 +1485,11 @@ public class VerifyReceiptRequest
 public class UpdateOrderPaymentMethodRequest
 {
     public string PaymentMethod { get; set; } = string.Empty;
+    // Información de transacción POS (opcional, solo para pagos POS)
+    public long? POSTransactionId { get; set; }
+    public string? POSTransactionIdString { get; set; }
+    public string? POSTransactionDateTime { get; set; }
+    public string? POSResponse { get; set; }
 }
 
 public class POSTransactionRequest
@@ -1474,6 +1500,7 @@ public class POSTransactionRequest
 public class POSVoidRequest
 {
     public decimal Amount { get; set; }
+    public string? TransactionDateTime { get; set; } // TransactionDateTime de la transacción original
 }
 
 public class POSQueryRequest

@@ -1150,7 +1150,14 @@ export default function TablesViewPage() {
     return codigos[statusCode.toString()] || `Código desconocido: ${statusCode}`;
   };
 
-  const enviarTransaccionPOS = async (amount: number): Promise<{ success: boolean; message: string }> => {
+  const enviarTransaccionPOS = async (amount: number): Promise<{ 
+    success: boolean; 
+    message: string; 
+    transactionId?: number;
+    sTransactionId?: string;
+    transactionDateTime?: string;
+    response?: string;
+  }> => {
     try {
       console.log('🚀 [TablesView] Iniciando envío de transacción POS:', { amount });
       
@@ -1194,6 +1201,8 @@ export default function TablesViewPage() {
         const minAttempts = 5; // Mínimo 5 intentos antes de dar por perdida
         const maxAttempts = 60; // Máximo 2 minutos (60 intentos * 2 segundos)
         let attempts = 0;
+        let code12Attempts = 0; // Contador específico para código 12
+        const maxCode12Attempts = 5; // Máximo 5 intentos adicionales cuando recibe código 12
         
         const pollInterval = setInterval(async () => {
           attempts++;
@@ -1216,22 +1225,29 @@ export default function TablesViewPage() {
             const fullMessage = `${codeMessage} (Código: ${queryResponse.statusCode})`;
             setPosStatusMessage(fullMessage);
             
-            // Manejar código 12 (tiempo excedido) - continuar polling
+            // Manejar código 12 (tiempo excedido) - continuar polling 5 veces más
             if (queryResponse.statusCode === 12) {
-              console.warn('⚠️ [TablesView] Tiempo de transacción excedido, continuando polling...');
-              setPosStatusMessage(`⚠️ ${fullMessage} - Continuando consulta...`);
+              code12Attempts++; // Incrementar contador de código 12
+              console.warn(`⚠️ [TablesView] Tiempo de transacción excedido (intento ${code12Attempts}/${maxCode12Attempts}), continuando polling...`);
+              setPosStatusMessage(`⚠️ ${fullMessage} - Continuando consulta (${code12Attempts}/${maxCode12Attempts})...`);
               
-              // Si ya hicimos al menos 5 intentos y sigue siendo código 12, mostrar error
-              if (attempts >= minAttempts) {
-                console.error('❌ [TablesView] Tiempo excedido después de múltiples intentos');
+              // Si ya hicimos 5 intentos adicionales con código 12, mostrar error
+              if (code12Attempts >= maxCode12Attempts) {
+                console.error('❌ [TablesView] Tiempo excedido después de 5 intentos adicionales con código 12');
                 clearInterval(pollInterval);
                 setIsPOSWaitingModalOpen(false);
-                showToast(`Tiempo de transacción excedido. ${fullMessage}`, 'error');
+                showToast(`Tiempo de transacción excedido después de ${maxCode12Attempts} intentos. ${fullMessage}`, 'error');
                 reject(new Error(`Tiempo de transacción excedido: ${fullMessage}`));
                 return;
               }
-              // Continuar consultando
+              // Continuar consultando (hacer 5 intentos más)
               return;
+            } else {
+              // Si recibimos un código diferente a 12, reiniciar el contador
+              if (code12Attempts > 0) {
+                console.log(`✅ [TablesView] Código cambió de 12 a ${queryResponse.statusCode}, reiniciando contador de código 12`);
+                code12Attempts = 0;
+              }
             }
             
             if (queryResponse.isCompleted) {
@@ -1241,7 +1257,11 @@ export default function TablesViewPage() {
               showToast(`Transacción POS completada: ${fullMessage}`, 'success');
               resolve({ 
                 success: true, 
-                message: `Transacción POS completada: ${fullMessage}` 
+                message: `Transacción POS completada: ${fullMessage}`,
+                transactionId: response.transactionId,
+                sTransactionId: response.sTransactionId,
+                transactionDateTime: response.transactionDateTime,
+                response: response.response
               });
             } else if (queryResponse.isError) {
               console.error('❌ [TablesView] Transacción POS rechazada:', queryResponse.statusMessage);
@@ -1302,9 +1322,23 @@ export default function TablesViewPage() {
     try {
       setIsProcessingPayment(true);
       
+      let posTransactionInfo: { 
+        transactionId?: number; 
+        sTransactionId?: string; 
+        transactionDateTime?: string; 
+        response?: string 
+      } | undefined = undefined;
+      
       if (selectedPaymentMethod.toLowerCase() === 'pos') {
         try {
-          await enviarTransaccionPOS(totalAmount);
+          const posResult = await enviarTransaccionPOS(totalAmount);
+          // Guardar información de la transacción POS para pasarla al procesar el pago
+          posTransactionInfo = {
+            transactionId: posResult.transactionId,
+            sTransactionId: posResult.sTransactionId,
+            transactionDateTime: posResult.transactionDateTime,
+            response: posResult.response
+          };
           // El toast ya se muestra dentro de enviarTransaccionPOS
         } catch (error: any) {
           // El modal y toast ya se manejan dentro de enviarTransaccionPOS
@@ -1315,7 +1349,7 @@ export default function TablesViewPage() {
       
       // Procesar el pago de todos los pedidos
       for (const order of tableOrders) {
-        await api.processTablePayment(order.id, selectedPaymentMethod);
+        await api.processTablePayment(order.id, selectedPaymentMethod, posTransactionInfo);
         // Archivar el pedido después de procesar el pago para que no siga apareciendo en la mesa
         try {
           await api.archiveOrder(order.id);

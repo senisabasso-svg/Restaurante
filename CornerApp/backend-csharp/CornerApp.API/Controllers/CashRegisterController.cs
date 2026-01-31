@@ -250,10 +250,11 @@ public class CashRegisterController : ControllerBase
 
             // Calcular totales desde los pedidos de ESTA sesión de caja específica
             // Solo contar pedidos creados DESPUÉS de que se abrió esta caja
+            // Incluir pedidos archivados que fueron completados durante esta sesión (fueron cobrados)
             var orders = await _context.Orders
                 .Where(o => o.CreatedAt >= cashRegister.OpenedAt  // Desde que se abrió esta caja
-                    && o.Status == OrderConstants.STATUS_COMPLETED
-                    && !o.IsArchived)
+                    && o.Status == OrderConstants.STATUS_COMPLETED)
+                    // Removido: && !o.IsArchived - Ahora incluimos pedidos archivados que fueron cobrados
                 .ToListAsync();
 
             var totalSales = orders.Sum(o => o.Total);
@@ -346,13 +347,14 @@ public class CashRegisterController : ControllerBase
 
             // Obtener todos los pedidos completados durante esta sesión de caja específica
             // Solo pedidos creados DESPUÉS de que se abrió esta caja y ANTES de que se cerró (o ahora si está abierta)
+            // Incluir pedidos archivados que fueron completados durante esta sesión (fueron cobrados)
             var orders = await _context.Orders
                 .AsNoTracking()
                 .Include(o => o.Items)
                 .Where(o => o.CreatedAt >= cashRegister.OpenedAt  // Desde que se abrió esta caja
                     && (cashRegister.ClosedAt == null || o.CreatedAt <= cashRegister.ClosedAt.Value)  // Hasta que se cerró (o ahora si está abierta)
-                    && o.Status == OrderConstants.STATUS_COMPLETED
-                    && !o.IsArchived)
+                    && o.Status == OrderConstants.STATUS_COMPLETED)
+                    // Removido: && !o.IsArchived - Ahora incluimos pedidos archivados que fueron cobrados
                 .OrderByDescending(o => o.CreatedAt)
                 .Select(o => new
                 {
@@ -364,6 +366,11 @@ public class CashRegisterController : ControllerBase
                     total = o.Total,
                     createdAt = o.CreatedAt,
                     itemsCount = o.Items.Count,
+                    // Información de transacción POS (si aplica)
+                    posTransactionId = o.POSTransactionId,
+                    posTransactionIdString = o.POSTransactionIdString,
+                    posTransactionDateTime = o.POSTransactionDateTime,
+                    posResponse = o.POSResponse,
                     items = o.Items.Select(i => new
                     {
                         productName = i.ProductName,
