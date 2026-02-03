@@ -88,7 +88,7 @@ public interface IAdminDashboardService
     /// <summary>
     /// Actualiza una categoría existente
     /// </summary>
-    Task<Category> UpdateCategoryAsync(int id, string? name, string? description, string? icon, int? displayOrder, bool? isActive);
+    Task<Category> UpdateCategoryAsync(int id, int restaurantId, string? name, string? description, string? icon, int? displayOrder, bool? isActive);
 
     /// <summary>
     /// Verifica si existe una categoría con el nombre dado (excluyendo el id especificado)

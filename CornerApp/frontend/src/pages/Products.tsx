@@ -58,12 +58,14 @@ export default function ProductsPage() {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh: boolean = false) => {
     try {
       setLoading(true);
+      // Agregar timestamp para evitar caché del navegador cuando se fuerza recarga
+      const timestamp = forceRefresh ? `?t=${Date.now()}` : '';
       const [productsData, categoriesData] = await Promise.all([
         api.getProducts(),
-        api.getCategories(),
+        api.getCategories(timestamp),
       ]);
       
       // Cargar subproductos para cada producto
@@ -87,14 +89,22 @@ export default function ProductsPage() {
     }
   };
 
-  const openCreateModal = () => {
+  const openCreateModal = async () => {
     setEditingProduct(null);
+    // Recargar categorías antes de abrir el modal para asegurar que tenemos las más recientes
+    let freshCategories = categories;
+    try {
+      freshCategories = await api.getCategories(`?t=${Date.now()}`);
+      setCategories(freshCategories);
+    } catch (error) {
+      console.error('Error al recargar categorías:', error);
+    }
     setFormData({
       name: '',
       description: '',
       price: 0,
       image: '',
-      categoryId: categories[0]?.id || 0,
+      categoryId: freshCategories[0]?.id || 0,
       displayOrder: 0,
       isAvailable: true,
     });

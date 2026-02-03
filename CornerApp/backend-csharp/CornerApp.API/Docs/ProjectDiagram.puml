@@ -1,0 +1,654 @@
+@startuml
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' ============================================
+' DIAGRAMA COMPLETO DEL PROYECTO CORNERAPP
+' Sistema Multi-Tenant de Gestión de Restaurantes
+' ============================================
+
+package "Models (Entidades)" {
+    class Restaurant {
+        +int Id
+        +string Name
+        +string Identifier
+        +string? Description
+        +string? Address
+        +string? Phone
+        +string? Email
+        +bool IsActive
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +List<Admin> Admins
+        +List<Order> Orders
+        +List<Product> Products
+        +List<Category> Categories
+        +List<Table> Tables
+        +List<Space> Spaces
+        +List<DeliveryPerson> DeliveryPersons
+        +List<Customer> Customers
+        +List<CashRegister> CashRegisters
+        +BusinessInfo? BusinessInfo
+        +DeliveryZoneConfig? DeliveryZoneConfig
+        +EmailConfig? EmailConfig
+    }
+
+    class Admin {
+        +int Id
+        +int RestaurantId
+        +string Username
+        +string Email
+        +string PasswordHash
+        +string Name
+        +string Role
+        +DateTime CreatedAt
+        --
+        +Restaurant? Restaurant
+    }
+
+    class Category {
+        +int Id
+        +int RestaurantId
+        +string Name
+        +string Description
+        +string? Icon
+        +int DisplayOrder
+        +bool IsActive
+        +DateTime CreatedAt
+        --
+        +Restaurant? Restaurant
+        +List<Product> Products
+    }
+
+    class Product {
+        +int Id
+        +int RestaurantId
+        +string Name
+        +string Description
+        +decimal Price
+        +string Image
+        +int DisplayOrder
+        +bool IsAvailable
+        +int CategoryId
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +Restaurant? Restaurant
+        +Category? Category
+        +List<SubProduct> SubProducts
+    }
+
+    class SubProduct {
+        +int Id
+        +int ProductId
+        +string Name
+        +string? Description
+        +decimal Price
+        +int DisplayOrder
+        +bool IsAvailable
+        +DateTime CreatedAt
+        --
+        +Product? Product
+    }
+
+    class Order {
+        +int Id
+        +int RestaurantId
+        +int? CustomerId
+        +int? DeliveryPersonId
+        +int? TableId
+        +string CustomerName
+        +string CustomerPhone
+        +string CustomerAddress
+        +string CustomerEmail
+        +decimal Total
+        +string PaymentMethod
+        +string Status
+        +int EstimatedDeliveryMinutes
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        +bool IsArchived
+        +DateTime? ArchivedAt
+        +string? Comments
+        --
+        +Restaurant? Restaurant
+        +Customer? Customer
+        +DeliveryPerson? DeliveryPerson
+        +Table? Table
+        +List<OrderItem> Items
+        +List<OrderStatusHistory> StatusHistory
+    }
+
+    class OrderItem {
+        +int Id
+        +int OrderId
+        +int ProductId
+        +string ProductName
+        +int? CategoryId
+        +string? CategoryName
+        +decimal UnitPrice
+        +int Quantity
+        +decimal Subtotal
+        +string? SubProductsJson
+        --
+        +List<OrderItemSubProduct>? SubProducts
+    }
+
+    class OrderItemSubProduct {
+        +int Id
+        +string Name
+        +decimal Price
+    }
+
+    class OrderStatusHistory {
+        +int Id
+        +int OrderId
+        +string Status
+        +DateTime ChangedAt
+        +string? ChangedBy
+    }
+
+    class Customer {
+        +int Id
+        +int? RestaurantId
+        +string Name
+        +string Phone
+        +string Email
+        +string? DefaultAddress
+        +string? DocumentType
+        +string? DocumentNumber
+        +string PasswordHash
+        +int Points
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +Restaurant? Restaurant
+        +List<Order> Orders
+    }
+
+    class DeliveryPerson {
+        +int Id
+        +int RestaurantId
+        +string Name
+        +string Phone
+        +string? Email
+        +string Username
+        +string PasswordHash
+        +bool IsActive
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +Restaurant? Restaurant
+        +List<Order> Orders
+    }
+
+    class Table {
+        +int Id
+        +int RestaurantId
+        +string Number
+        +int Capacity
+        +string? Location
+        +int? SpaceId
+        +double? PositionX
+        +double? PositionY
+        +string Status
+        +bool IsActive
+        +string? Notes
+        +DateTime? OrderPlacedAt
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +Restaurant? Restaurant
+        +Space? Space
+        +List<Order> Orders
+    }
+
+    class Space {
+        +int Id
+        +int RestaurantId
+        +string Name
+        +string? Description
+        +bool IsActive
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +Restaurant? Restaurant
+        +List<Table> Tables
+    }
+
+    class CashRegister {
+        +int Id
+        +int RestaurantId
+        +DateTime OpenedAt
+        +DateTime? ClosedAt
+        +decimal InitialAmount
+        +decimal? FinalAmount
+        +decimal TotalSales
+        +decimal TotalCash
+        +decimal TotalPOS
+        +decimal TotalTransfer
+        +bool IsOpen
+        +string? CreatedBy
+        +string? ClosedBy
+        +string? Notes
+        +DateTime CreatedAt
+        +DateTime? UpdatedAt
+        --
+        +Restaurant? Restaurant
+    }
+
+    class DeliveryCashRegister {
+        +int Id
+        +int DeliveryPersonId
+        +DateTime OpenedAt
+        +DateTime? ClosedAt
+        +decimal InitialAmount
+        +decimal? FinalAmount
+        +decimal TotalSales
+        +decimal TotalCash
+        +decimal TotalPOS
+        +decimal TotalTransfer
+        +bool IsOpen
+        +string? Notes
+        --
+        +DeliveryPerson? DeliveryPerson
+    }
+
+    class PaymentMethod {
+        +int Id
+        +string Name
+        +string DisplayName
+        +string? Icon
+        +string? Description
+        +bool IsActive
+        +bool RequiresReceipt
+        +int DisplayOrder
+    }
+
+    class Reward {
+        +int Id
+        +string Name
+        +string? Description
+        +int PointsRequired
+        +bool IsActive
+        +decimal? DiscountPercentage
+    }
+
+    class BusinessInfo {
+        +int Id
+        +int RestaurantId
+        +string? BusinessName
+        +string? TaxId
+        +string? Address
+        +string? Phone
+        +string? Email
+    }
+
+    class DeliveryZoneConfig {
+        +int Id
+        +int RestaurantId
+        +bool IsEnabled
+        +decimal? DeliveryFee
+        +int? MinOrderAmount
+    }
+
+    class EmailConfig {
+        +int Id
+        +int RestaurantId
+        +string? SmtpHost
+        +int SmtpPort
+        +bool SmtpUseSsl
+        +string? SmtpUsername
+        +string? SmtpPassword
+        +string? FromEmail
+        +string? FromName
+        +bool IsEnabled
+    }
+
+    class WebhookSubscription {
+        +int Id
+        +string Url
+        +string EventType
+        +string? Secret
+        +string? Headers
+        +bool IsActive
+        +int SuccessCount
+        +int FailureCount
+        +int? UserId
+    }
+}
+
+' Relaciones principales
+Restaurant ||--o{ Admin : "tiene"
+Restaurant ||--o{ Category : "tiene"
+Restaurant ||--o{ Product : "tiene"
+Restaurant ||--o{ Order : "tiene"
+Restaurant ||--o{ Customer : "tiene"
+Restaurant ||--o{ DeliveryPerson : "tiene"
+Restaurant ||--o{ Table : "tiene"
+Restaurant ||--o{ Space : "tiene"
+Restaurant ||--o{ CashRegister : "tiene"
+Restaurant ||--|| BusinessInfo : "tiene"
+Restaurant ||--|| DeliveryZoneConfig : "tiene"
+Restaurant ||--|| EmailConfig : "tiene"
+
+Category ||--o{ Product : "contiene"
+Product ||--o{ SubProduct : "tiene"
+
+Order ||--o{ OrderItem : "contiene"
+OrderItem }o--|| Product : "referencia"
+OrderItem ||--o{ OrderItemSubProduct : "tiene"
+Order ||--o{ OrderStatusHistory : "tiene"
+Order }o--|| Customer : "opcional"
+Order }o--|| DeliveryPerson : "opcional"
+Order }o--|| Table : "opcional"
+
+Table }o--|| Space : "pertenece a"
+DeliveryPerson ||--o{ DeliveryCashRegister : "tiene"
+
+package "Controllers (API)" {
+    class AuthController {
+        +AdminLogin()
+        +SuperAdminLogin()
+        +GenerateAdminJwtToken()
+        +GenerateSuperAdminJwtToken()
+    }
+
+    class RestaurantsController {
+        +GetRestaurants()
+        +GetRestaurant()
+        +CreateRestaurant()
+        +UpdateRestaurant()
+        +DeleteRestaurant()
+        +CleanupOrphanedData()
+    }
+
+    class AdminCategoriesController {
+        +GetCategories()
+        +GetCategory()
+        +CreateCategory()
+        +UpdateCategory()
+        +DeleteCategory()
+        +GetCategoriesForWaiter()
+    }
+
+    class CategoriesController {
+        +GetCategories()
+        +GetCategory()
+        +CreateCategory()
+        +UpdateCategory()
+        +DeleteCategory()
+    }
+
+    class AdminProductsController {
+        +GetProducts()
+        +GetProduct()
+        +CreateProduct()
+        +UpdateProduct()
+        +DeleteProduct()
+        +GetProductsForWaiter()
+    }
+
+    class ProductsController {
+        +GetProducts()
+        +GetProduct()
+        +CreateProduct()
+        +UpdateProduct()
+        +DeleteProduct()
+    }
+
+    class AdminOrdersController {
+        +GetOrders()
+        +GetOrder()
+        +CreateOrder()
+        +UpdateOrder()
+        +UpdateOrderStatus()
+        +ArchiveOrder()
+        +GetProducts()
+    }
+
+    class OrdersController {
+        +GetOrders()
+        +GetOrder()
+        +CreateOrder()
+    }
+
+    class TablesController {
+        +GetTables()
+        +GetTable()
+        +CreateTable()
+        +UpdateTable()
+        +DeleteTable()
+        +CreateOrderFromTable()
+        +GetTableOrders()
+        +SyncTableStatus()
+    }
+
+    class SpacesController {
+        +GetSpaces()
+        +GetSpace()
+        +CreateSpace()
+        +UpdateSpace()
+        +DeleteSpace()
+    }
+
+    class CustomersController {
+        +GetCustomers()
+        +GetCustomer()
+        +CreateCustomer()
+        +SearchCustomer()
+    }
+
+    class AdminCustomersController {
+        +GetCustomers()
+        +GetCustomer()
+        +CreateCustomer()
+        +UpdateCustomer()
+        +DeleteCustomer()
+    }
+
+    class AdminDeliveryPersonsController {
+        +GetAllDeliveryPersons()
+        +GetDeliveryPerson()
+        +CreateDeliveryPerson()
+        +UpdateDeliveryPerson()
+        +DeleteDeliveryPerson()
+        +GetStats()
+    }
+
+    class CashRegisterController {
+        +OpenCashRegister()
+        +CloseCashRegister()
+        +GetCashRegisterStatus()
+        +GetCashRegisterHistory()
+    }
+
+    class AdminUsersController {
+        +GetUsers()
+        +GetUser()
+        +CreateUser()
+        +UpdateUser()
+        +DeleteUser()
+    }
+
+    class AdminReportsController {
+        +GetRevenue()
+        +GetTopProducts()
+        +GetStats()
+        +GetComparison()
+        +GetRevenueByPaymentMethod()
+        +GetPeakHours()
+        +GetTopCustomers()
+        +GetDeliveryPerformance()
+        +GetExportData()
+        +GetCashRegisters()
+    }
+
+    class SubProductsController {
+        +GetSubProductsByProduct()
+        +GetSubProduct()
+        +CreateSubProduct()
+        +UpdateSubProduct()
+        +DeleteSubProduct()
+    }
+}
+
+' Relaciones Controllers -> Models
+AuthController ..> Admin : "autentica"
+RestaurantsController ..> Restaurant : "gestiona"
+RestaurantsController ..> Admin : "crea admin inicial"
+AdminCategoriesController ..> Category : "gestiona"
+CategoriesController ..> Category : "consulta"
+AdminProductsController ..> Product : "gestiona"
+ProductsController ..> Product : "consulta"
+AdminOrdersController ..> Order : "gestiona"
+OrdersController ..> Order : "consulta"
+TablesController ..> Table : "gestiona"
+TablesController ..> Order : "crea pedidos"
+SpacesController ..> Space : "gestiona"
+CustomersController ..> Customer : "consulta"
+AdminCustomersController ..> Customer : "gestiona"
+AdminDeliveryPersonsController ..> DeliveryPerson : "gestiona"
+CashRegisterController ..> CashRegister : "gestiona"
+AdminUsersController ..> Admin : "gestiona"
+AdminReportsController ..> Order : "analiza"
+SubProductsController ..> SubProduct : "gestiona"
+
+package "Services" {
+    class IAdminDashboardService {
+        +CreateCategoryAsync()
+        +UpdateCategoryAsync()
+        +CreateProductAsync()
+        +UpdateProductAsync()
+    }
+
+    class AdminDashboardService {
+        +CreateCategoryAsync()
+        +UpdateCategoryAsync()
+        +CreateProductAsync()
+        +UpdateProductAsync()
+    }
+
+    class ICacheService {
+        +GetAsync<T>()
+        +SetAsync<T>()
+        +RemoveAsync()
+    }
+
+    class CacheService {
+        +GetAsync<T>()
+        +SetAsync<T>()
+        +RemoveAsync()
+    }
+
+    class IOrderNotificationService {
+        +NotifyOrderCreated()
+        +NotifyOrderStatusChanged()
+    }
+
+    class OrderNotificationService {
+        +NotifyOrderCreated()
+        +NotifyOrderStatusChanged()
+    }
+
+    class IEmailService {
+        +SendEmailAsync()
+    }
+
+    class EmailService {
+        +SendEmailAsync()
+    }
+
+    class IWebhookService {
+        +NotifyWebhookAsync()
+    }
+
+    class WebhookService {
+        +NotifyWebhookAsync()
+    }
+
+    class IMetricsService {
+        +RecordCacheHit()
+        +RecordCacheMiss()
+    }
+
+    class MetricsService {
+        +RecordCacheHit()
+        +RecordCacheMiss()
+    }
+}
+
+' Relaciones Services -> Models
+AdminDashboardService ..> Category : "maneja"
+AdminDashboardService ..> Product : "maneja"
+OrderNotificationService ..> Order : "notifica"
+EmailService ..> Order : "envía emails"
+WebhookService ..> Order : "notifica webhooks"
+
+package "Helpers" {
+    class RestaurantHelper {
+        +GetRestaurantId()
+        +GetRestaurantIdOrNull()
+    }
+
+    class ETagHelper {
+        +GenerateETag()
+        +IsETagValid()
+    }
+}
+
+RestaurantHelper ..> Admin : "extrae RestaurantId del token"
+
+package "Data" {
+    class ApplicationDbContext {
+        +DbSet<Restaurant> Restaurants
+        +DbSet<Product> Products
+        +DbSet<Category> Categories
+        +DbSet<Order> Orders
+        +DbSet<Customer> Customers
+        +DbSet<Admin> Admins
+        +DbSet<Table> Tables
+        +DbSet<Space> Spaces
+        +DbSet<CashRegister> CashRegisters
+        +DbSet<DeliveryPerson> DeliveryPersons
+        +OnModelCreating()
+    }
+}
+
+ApplicationDbContext ..> Restaurant : "persiste"
+ApplicationDbContext ..> Product : "persiste"
+ApplicationDbContext ..> Category : "persiste"
+ApplicationDbContext ..> Order : "persiste"
+ApplicationDbContext ..> Customer : "persiste"
+ApplicationDbContext ..> Admin : "persiste"
+ApplicationDbContext ..> Table : "persiste"
+ApplicationDbContext ..> Space : "persiste"
+ApplicationDbContext ..> CashRegister : "persiste"
+ApplicationDbContext ..> DeliveryPerson : "persiste"
+
+note right of Restaurant
+  **Multi-Tenant Core**
+  Todas las entidades principales
+  tienen RestaurantId para
+  aislamiento de datos
+end note
+
+note right of Order
+  **Entidad Central**
+  Conecta:
+  - Restaurant
+  - Customer
+  - DeliveryPerson
+  - Table
+  - Products (via OrderItems)
+end note
+
+note bottom of ApplicationDbContext
+  **Entity Framework Core**
+  Configura todas las relaciones
+  y restricciones de la BD
+end note
+
+@enduml

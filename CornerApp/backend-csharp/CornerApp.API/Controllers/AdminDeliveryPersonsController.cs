@@ -351,7 +351,7 @@ public class AdminDeliveryPersonsController : ControllerBase
 
         var openCashRegister = await _context.DeliveryCashRegisters
             .Include(dcr => dcr.DeliveryPerson)
-            .Where(c => c.DeliveryPersonId == id && c.IsOpen)
+            .Where(c => c.DeliveryPersonId == id && c.RestaurantId == restaurantId && c.IsOpen)
             .OrderByDescending(c => c.OpenedAt)
             .FirstOrDefaultAsync();
 
@@ -416,9 +416,9 @@ public class AdminDeliveryPersonsController : ControllerBase
             return BadRequest(new { error = "El monto inicial es requerido y debe ser mayor o igual a 0" });
         }
 
-        // Verificar que no haya una caja abierta para este repartidor
+        // Verificar que no haya una caja abierta para este repartidor (del mismo restaurante)
         var existingOpenCashRegister = await _context.DeliveryCashRegisters
-            .Where(c => c.DeliveryPersonId == id && c.IsOpen)
+            .Where(c => c.DeliveryPersonId == id && c.RestaurantId == restaurantId && c.IsOpen)
             .FirstOrDefaultAsync();
 
         if (existingOpenCashRegister != null)
@@ -428,6 +428,7 @@ public class AdminDeliveryPersonsController : ControllerBase
 
         var cashRegister = new DeliveryCashRegister
         {
+            RestaurantId = restaurantId, // Asignar RestaurantId
             DeliveryPersonId = id,
             OpenedAt = DateTime.UtcNow,
             IsOpen = true,
@@ -460,9 +461,9 @@ public class AdminDeliveryPersonsController : ControllerBase
             return NotFound(new { error = "Repartidor no encontrado o no pertenece a tu restaurante" });
         }
 
-        // Obtener la caja abierta de este repartidor
+        // Obtener la caja abierta de este repartidor (del mismo restaurante)
         var cashRegister = await _context.DeliveryCashRegisters
-            .Where(c => c.DeliveryPersonId == id && c.IsOpen)
+            .Where(c => c.DeliveryPersonId == id && c.RestaurantId == restaurantId && c.IsOpen)
             .OrderByDescending(c => c.OpenedAt)
             .FirstOrDefaultAsync();
 
@@ -594,9 +595,9 @@ public class AdminDeliveryPersonsController : ControllerBase
             return NotFound(new { error = "Repartidor no encontrado o no pertenece a tu restaurante" });
         }
 
-        // Verificar si hay una caja abierta
+        // Verificar si hay una caja abierta (del mismo restaurante)
         var openCashRegister = await _context.DeliveryCashRegisters
-            .Where(c => c.DeliveryPersonId == id && c.IsOpen)
+            .Where(c => c.DeliveryPersonId == id && c.RestaurantId == restaurantId && c.IsOpen)
             .OrderByDescending(c => c.OpenedAt)
             .FirstOrDefaultAsync();
 

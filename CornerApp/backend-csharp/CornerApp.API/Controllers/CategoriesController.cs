@@ -33,7 +33,7 @@ public class CategoriesController : ControllerBase
     /// Obtiene todas las categorías activas del restaurante del usuario autenticado
     /// </summary>
     [HttpGet]
-    [ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // Deshabilitar ResponseCache para evitar problemas con multi-tenant
     public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
     {
         // Obtener RestaurantId del usuario autenticado
@@ -46,6 +46,15 @@ public class CategoriesController : ControllerBase
         var cachedCategories = await _cache.GetAsync<List<Category>>(cacheKey);
         if (cachedCategories != null)
         {
+            // Generar ETag también para respuestas desde cache
+            var cachedETag = ETagHelper.GenerateETag(cachedCategories);
+            var clientETag = Request.Headers["If-None-Match"].ToString();
+            if (!string.IsNullOrEmpty(clientETag) && ETagHelper.IsETagValid(clientETag, cachedETag))
+            {
+                _logger.LogInformation("Categorías no han cambiado (ETag match desde cache) para restaurante {RestaurantId}: {Count}", restaurantId, cachedCategories.Count);
+                return StatusCode(304); // Not Modified
+            }
+            Response.Headers.Append("ETag", cachedETag);
             _logger.LogInformation("Categorías obtenidas del cache para restaurante {RestaurantId}: {Count}", restaurantId, cachedCategories.Count);
             return Ok(cachedCategories);
         }
@@ -90,7 +99,7 @@ public class CategoriesController : ControllerBase
     /// Obtiene una categoría por ID (solo del restaurante del usuario)
     /// </summary>
     [HttpGet("{id}")]
-    [ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any, VaryByHeader = "Accept")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)] // Deshabilitar ResponseCache para evitar problemas con multi-tenant
     public async Task<ActionResult<Category>> GetCategory(int id)
     {
         var restaurantId = RestaurantHelper.GetRestaurantId(User);
@@ -188,6 +197,11 @@ public class CategoriesController : ControllerBase
             category.IsActive = request.IsActive ?? category.IsActive;
 
             await _context.SaveChangesAsync();
+
+            // Invalidar cache de categorías y productos para este restaurante
+            var cacheKey = $"{CATEGORIES_CACHE_KEY}_{restaurantId}";
+            await _cache.RemoveAsync(cacheKey);
+            await _cache.RemoveAsync($"products_list_{restaurantId}");
 
             _logger.LogInformation("Categoría actualizada: {CategoryId}", category.Id);
             return Ok(category);

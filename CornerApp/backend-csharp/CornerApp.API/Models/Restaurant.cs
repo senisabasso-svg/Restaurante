@@ -26,6 +26,7 @@ public class Restaurant
     public List<DeliveryPerson> DeliveryPersons { get; set; } = new();
     public List<Customer> Customers { get; set; } = new();
     public List<CashRegister> CashRegisters { get; set; } = new();
+    public List<DeliveryCashRegister> DeliveryCashRegisters { get; set; } = new();
     public BusinessInfo? BusinessInfo { get; set; }
     public DeliveryZoneConfig? DeliveryZoneConfig { get; set; }
     public EmailConfig? EmailConfig { get; set; }

@@ -381,12 +381,14 @@ public class AdminDashboardService : IAdminDashboardService
     /// <summary>
     /// Actualiza una categoría existente
     /// </summary>
-    public async Task<Category> UpdateCategoryAsync(int id, string? name, string? description, string? icon, int? displayOrder, bool? isActive)
+    public async Task<Category> UpdateCategoryAsync(int id, int restaurantId, string? name, string? description, string? icon, int? displayOrder, bool? isActive)
     {
-        var category = await _context.Categories.FindAsync(id);
+        var category = await _context.Categories
+            .FirstOrDefaultAsync(c => c.Id == id && c.RestaurantId == restaurantId);
+        
         if (category == null)
         {
-            throw new KeyNotFoundException("Categoría no encontrada");
+            throw new KeyNotFoundException("Categoría no encontrada o no pertenece a tu restaurante");
         }
 
         // Actualizar el nombre si se proporciona
@@ -399,7 +401,7 @@ public class AdminDashboardService : IAdminDashboardService
             if (currentName.ToLower() != trimmedName.ToLower())
             {
                 var existingCategory = await _context.Categories
-                    .FirstOrDefaultAsync(c => c.RestaurantId == category.RestaurantId && 
+                    .FirstOrDefaultAsync(c => c.RestaurantId == restaurantId && 
                                              c.Name != null && 
                                              c.Name.ToLower() == trimmedName.ToLower() && 
                                              c.Id != id);

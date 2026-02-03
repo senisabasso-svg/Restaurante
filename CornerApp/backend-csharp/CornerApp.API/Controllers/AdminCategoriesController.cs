@@ -154,11 +154,12 @@ public class AdminCategoriesController : ControllerBase
                 request.Description, 
                 request.Icon);
 
-            // Invalidar caché de categorías para que se refleje inmediatamente
+            // Invalidar caché de categorías para que se refleje inmediatamente (usar clave específica por restaurante)
             if (_cache != null)
             {
-                await _cache.RemoveAsync("categories_list");
-                await _cache.RemoveAsync("products_list");
+                var cacheKey = $"categories_list_{restaurantId}";
+                await _cache.RemoveAsync(cacheKey);
+                await _cache.RemoveAsync($"products_list_{restaurantId}");
             }
 
             return Ok(new
@@ -217,17 +218,19 @@ public class AdminCategoriesController : ControllerBase
 
             var category = await _adminDashboardService.UpdateCategoryAsync(
                 id,
+                restaurantId,
                 request.Name,
                 request.Description,
                 request.Icon,
                 request.DisplayOrder,
                 request.IsActive);
 
-            // Invalidar caché de categorías para que se refleje inmediatamente
+            // Invalidar caché de categorías para que se refleje inmediatamente (usar clave específica por restaurante)
             if (_cache != null)
             {
-                await _cache.RemoveAsync("categories_list");
-                await _cache.RemoveAsync("products_list");
+                var cacheKey = $"categories_list_{restaurantId}";
+                await _cache.RemoveAsync(cacheKey);
+                await _cache.RemoveAsync($"products_list_{restaurantId}");
             }
 
             return Ok(new
@@ -297,11 +300,12 @@ public class AdminCategoriesController : ControllerBase
             _context.Categories.Remove(category);
             await _context.SaveChangesAsync();
             
-            // Invalidar caché de categorías
+            // Invalidar caché de categorías (usar clave específica por restaurante)
             if (_cache != null)
             {
-                await _cache.RemoveAsync("categories_list");
-                await _cache.RemoveAsync("products_list");
+                var cacheKey = $"categories_list_{restaurantId}";
+                await _cache.RemoveAsync(cacheKey);
+                await _cache.RemoveAsync($"products_list_{restaurantId}");
             }
             
             _logger.LogInformation("Categoría eliminada: {CategoryId} del restaurante {RestaurantId}", category.Id, restaurantId);

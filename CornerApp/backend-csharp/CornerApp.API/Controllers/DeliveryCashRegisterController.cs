@@ -62,9 +62,20 @@ public class DeliveryCashRegisterController : ControllerBase
                 return Unauthorized(new { error = "Token inválido" });
             }
 
+            // Obtener RestaurantId del repartidor
+            var deliveryPerson = await _context.DeliveryPersons
+                .FirstOrDefaultAsync(d => d.Id == deliveryPersonId.Value);
+            
+            if (deliveryPerson == null)
+            {
+                return Unauthorized(new { error = "Repartidor no encontrado" });
+            }
+
+            var restaurantId = deliveryPerson.RestaurantId;
+
             var openCashRegister = await _context.DeliveryCashRegisters
                 .Include(dcr => dcr.DeliveryPerson)
-                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.IsOpen)
+                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.RestaurantId == restaurantId && c.IsOpen)
                 .OrderByDescending(c => c.OpenedAt)
                 .FirstOrDefaultAsync();
 
@@ -73,9 +84,10 @@ public class DeliveryCashRegisterController : ControllerBase
                 return Ok(new { isOpen = false, cashRegister = (object?)null });
             }
 
-            // Obtener pedidos asignados a este repartidor durante esta sesión
+            // Obtener pedidos asignados a este repartidor durante esta sesión (del mismo restaurante)
             var orders = await _context.Orders
                 .Where(o => o.DeliveryPersonId == deliveryPersonId.Value
+                    && o.RestaurantId == restaurantId
                     && o.CreatedAt >= openCashRegister.OpenedAt
                     && !o.IsArchived)
                 .ToListAsync();
@@ -135,9 +147,16 @@ public class DeliveryCashRegisterController : ControllerBase
                 return BadRequest(new { error = "Repartidor no encontrado o inactivo" });
             }
 
-            // Verificar que no haya una caja abierta para este repartidor
+            // Obtener RestaurantId del repartidor
+            var restaurantId = deliveryPerson.RestaurantId;
+            if (restaurantId <= 0)
+            {
+                return BadRequest(new { error = "El repartidor no tiene un restaurante asignado válido" });
+            }
+
+            // Verificar que no haya una caja abierta para este repartidor (del mismo restaurante)
             var existingOpenCashRegister = await _context.DeliveryCashRegisters
-                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.IsOpen)
+                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.RestaurantId == restaurantId && c.IsOpen)
                 .FirstOrDefaultAsync();
 
             if (existingOpenCashRegister != null)
@@ -147,6 +166,7 @@ public class DeliveryCashRegisterController : ControllerBase
 
             var cashRegister = new DeliveryCashRegister
             {
+                RestaurantId = restaurantId, // Asignar RestaurantId
                 DeliveryPersonId = deliveryPersonId.Value,
                 OpenedAt = DateTime.UtcNow,
                 IsOpen = true,
@@ -182,9 +202,20 @@ public class DeliveryCashRegisterController : ControllerBase
                 return Unauthorized(new { error = "Token inválido" });
             }
 
-            // Obtener la caja abierta de este repartidor
+            // Obtener RestaurantId del repartidor
+            var deliveryPerson = await _context.DeliveryPersons
+                .FirstOrDefaultAsync(d => d.Id == deliveryPersonId.Value);
+            
+            if (deliveryPerson == null)
+            {
+                return Unauthorized(new { error = "Repartidor no encontrado" });
+            }
+
+            var restaurantId = deliveryPerson.RestaurantId;
+
+            // Obtener la caja abierta de este repartidor (del mismo restaurante)
             var cashRegister = await _context.DeliveryCashRegisters
-                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.IsOpen)
+                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.RestaurantId == restaurantId && c.IsOpen)
                 .OrderByDescending(c => c.OpenedAt)
                 .FirstOrDefaultAsync();
 
@@ -193,9 +224,10 @@ public class DeliveryCashRegisterController : ControllerBase
                 return BadRequest(new { error = "No tienes una caja abierta para cerrar" });
             }
 
-            // Verificar que no haya pedidos activos asignados a este repartidor
+            // Verificar que no haya pedidos activos asignados a este repartidor (del mismo restaurante)
             var pendingOrders = await _context.Orders
                 .Where(o => o.DeliveryPersonId == deliveryPersonId.Value
+                    && o.RestaurantId == restaurantId
                     && o.CreatedAt >= cashRegister.OpenedAt
                     && o.Status != OrderConstants.STATUS_COMPLETED
                     && o.Status != OrderConstants.STATUS_CANCELLED
@@ -246,9 +278,20 @@ public class DeliveryCashRegisterController : ControllerBase
                 return Unauthorized(new { error = "Token inválido" });
             }
 
-            // Verificar que tenga una caja abierta
+            // Obtener RestaurantId del repartidor
+            var deliveryPerson = await _context.DeliveryPersons
+                .FirstOrDefaultAsync(d => d.Id == deliveryPersonId.Value);
+            
+            if (deliveryPerson == null)
+            {
+                return Unauthorized(new { error = "Repartidor no encontrado" });
+            }
+
+            var restaurantId = deliveryPerson.RestaurantId;
+
+            // Verificar que tenga una caja abierta (del mismo restaurante)
             var openCashRegister = await _context.DeliveryCashRegisters
-                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.IsOpen)
+                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.RestaurantId == restaurantId && c.IsOpen)
                 .FirstOrDefaultAsync();
 
             if (openCashRegister == null)
@@ -256,11 +299,12 @@ public class DeliveryCashRegisterController : ControllerBase
                 return BadRequest(new { error = "Debes abrir tu caja primero para ver tus pedidos" });
             }
 
-            // Obtener pedidos asignados a este repartidor (solo los que no están completados o cancelados)
+            // Obtener pedidos asignados a este repartidor (solo los que no están completados o cancelados, del mismo restaurante)
             var orders = await _context.Orders
                 .Include(o => o.Items)
                 .Include(o => o.Customer)
                 .Where(o => o.DeliveryPersonId == deliveryPersonId.Value
+                    && o.RestaurantId == restaurantId
                     && o.Status != OrderConstants.STATUS_COMPLETED
                     && o.Status != OrderConstants.STATUS_CANCELLED
                     && !o.IsArchived)
@@ -311,9 +355,20 @@ public class DeliveryCashRegisterController : ControllerBase
                 return Unauthorized(new { error = "Token inválido" });
             }
 
-            // Verificar que tenga una caja abierta
+            // Obtener RestaurantId del repartidor
+            var deliveryPerson = await _context.DeliveryPersons
+                .FirstOrDefaultAsync(d => d.Id == deliveryPersonId.Value);
+            
+            if (deliveryPerson == null)
+            {
+                return Unauthorized(new { error = "Repartidor no encontrado" });
+            }
+
+            var restaurantId = deliveryPerson.RestaurantId;
+
+            // Verificar que tenga una caja abierta (del mismo restaurante)
             var openCashRegister = await _context.DeliveryCashRegisters
-                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.IsOpen)
+                .Where(c => c.DeliveryPersonId == deliveryPersonId.Value && c.RestaurantId == restaurantId && c.IsOpen)
                 .FirstOrDefaultAsync();
 
             if (openCashRegister == null)
@@ -321,9 +376,9 @@ public class DeliveryCashRegisterController : ControllerBase
                 return BadRequest(new { error = "Debes abrir tu caja primero para gestionar pedidos" });
             }
 
-            // Verificar que el pedido esté asignado a este repartidor
+            // Verificar que el pedido esté asignado a este repartidor (del mismo restaurante)
             var order = await _context.Orders
-                .FirstOrDefaultAsync(o => o.Id == orderId && o.DeliveryPersonId == deliveryPersonId.Value);
+                .FirstOrDefaultAsync(o => o.Id == orderId && o.DeliveryPersonId == deliveryPersonId.Value && o.RestaurantId == restaurantId);
 
             if (order == null)
             {

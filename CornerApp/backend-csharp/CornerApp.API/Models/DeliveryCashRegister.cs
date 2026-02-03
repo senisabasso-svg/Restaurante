@@ -8,6 +8,10 @@ public class DeliveryCashRegister
 {
     public int Id { get; set; }
     
+    // Multi-tenant: cada caja de repartidor pertenece a un restaurante
+    public int RestaurantId { get; set; }
+    public Restaurant? Restaurant { get; set; }
+    
     /// <summary>
     /// ID del repartidor que abrió la caja
     /// </summary>

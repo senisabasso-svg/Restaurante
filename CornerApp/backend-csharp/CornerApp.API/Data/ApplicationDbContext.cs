@@ -436,6 +436,12 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.TotalTransfer).HasColumnType("decimal(18,2)").HasDefaultValue(0);
             entity.Property(e => e.Notes).HasMaxLength(1000);
             
+            // Relación con Restaurant
+            entity.HasOne(e => e.Restaurant)
+                  .WithMany()
+                  .HasForeignKey(e => e.RestaurantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            
             // Relación con DeliveryPerson
             entity.HasOne(e => e.DeliveryPerson)
                   .WithMany()
@@ -443,10 +449,11 @@ public class ApplicationDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
             
             // Índices para optimizar consultas
+            entity.HasIndex(e => e.RestaurantId);
             entity.HasIndex(e => e.DeliveryPersonId);
             entity.HasIndex(e => e.IsOpen);
             entity.HasIndex(e => e.OpenedAt);
-            entity.HasIndex(e => new { e.DeliveryPersonId, e.IsOpen }); // Índice compuesto para consultas de caja abierta por repartidor
+            entity.HasIndex(e => new { e.RestaurantId, e.DeliveryPersonId, e.IsOpen }); // Índice compuesto para consultas de caja abierta por restaurante y repartidor
         });
     }
 }
