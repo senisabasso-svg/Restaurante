@@ -1439,15 +1439,45 @@ public class AdminOrdersController : ControllerBase
                         // Guardar información de la devolución en el pedido si existe
                         if (originalOrder != null)
                         {
-                            originalOrder.POSRefundTransactionId = refundTransactionId;
-                            originalOrder.POSRefundTransactionIdString = refundTransactionIdString;
-                            originalOrder.POSRefundTransactionDateTime = refundTransactionDateTime;
-                            originalOrder.POSRefundResponse = responseContent;
-                            originalOrder.POSRefundedAt = DateTime.UtcNow;
-                            originalOrder.UpdatedAt = DateTime.UtcNow;
+                            // Buscar todos los pedidos que compartan la misma transacción POS
+                            var transactionIdToMatch = originalOrder.POSTransactionId?.ToString() ?? originalOrder.POSTransactionIdString;
+                            
+                            if (!string.IsNullOrWhiteSpace(transactionIdToMatch))
+                            {
+                                // Buscar todos los pedidos con la misma transacción POS
+                                var ordersWithSameTransaction = await _context.Orders
+                                    .Where(o => (o.POSTransactionId != null && o.POSTransactionId.ToString() == transactionIdToMatch) ||
+                                                (o.POSTransactionIdString != null && o.POSTransactionIdString == transactionIdToMatch))
+                                    .ToListAsync();
 
-                            await _context.SaveChangesAsync();
-                            _logger.LogInformation("Información de devolución guardada en pedido {OrderId}", originalOrder.Id);
+                                // Actualizar todos los pedidos que compartan la misma transacción POS
+                                foreach (var orderToUpdate in ordersWithSameTransaction)
+                                {
+                                    orderToUpdate.POSRefundTransactionId = refundTransactionId;
+                                    orderToUpdate.POSRefundTransactionIdString = refundTransactionIdString;
+                                    orderToUpdate.POSRefundTransactionDateTime = refundTransactionDateTime;
+                                    orderToUpdate.POSRefundResponse = responseContent;
+                                    orderToUpdate.POSRefundedAt = DateTime.UtcNow;
+                                    orderToUpdate.UpdatedAt = DateTime.UtcNow;
+                                }
+
+                                await _context.SaveChangesAsync();
+                                _logger.LogInformation("Información de devolución guardada en {Count} pedido(s) con transacción POS {TransactionId}", 
+                                    ordersWithSameTransaction.Count, transactionIdToMatch);
+                            }
+                            else
+                            {
+                                // Si no hay transactionId, solo actualizar el pedido original
+                                originalOrder.POSRefundTransactionId = refundTransactionId;
+                                originalOrder.POSRefundTransactionIdString = refundTransactionIdString;
+                                originalOrder.POSRefundTransactionDateTime = refundTransactionDateTime;
+                                originalOrder.POSRefundResponse = responseContent;
+                                originalOrder.POSRefundedAt = DateTime.UtcNow;
+                                originalOrder.UpdatedAt = DateTime.UtcNow;
+
+                                await _context.SaveChangesAsync();
+                                _logger.LogInformation("Información de devolución guardada en pedido {OrderId}", originalOrder.Id);
+                            }
                         }
                     }
                     else

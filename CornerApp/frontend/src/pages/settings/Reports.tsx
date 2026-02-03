@@ -187,6 +187,64 @@ export default function ReportsPage() {
       setLoadingMovements(true);
       setIsCashRegisterMovementsModalOpen(true);
       const movements = await api.getCashRegisterMovements(cashRegisterId);
+      
+      // Agrupar pedidos POS por posTransactionId para mostrar una sola opción de devolución por transacción
+      if (movements.orders) {
+        const groupedOrders: any[] = [];
+        const posTransactionsMap = new Map<string, any>();
+        const nonPosOrders: any[] = [];
+
+        movements.orders.forEach((order: any) => {
+          // Si es pago POS y tiene transacción ID, agrupar por posTransactionId
+          if (order.paymentMethod?.toLowerCase() === 'pos' && (order.posTransactionId || order.posTransactionIdString)) {
+            const transactionId = order.posTransactionId?.toString() || order.posTransactionIdString || '';
+            
+            if (posTransactionsMap.has(transactionId)) {
+              // Ya existe una transacción con este ID, agregar este pedido al grupo
+              const existing = posTransactionsMap.get(transactionId);
+              existing.orders.push(order);
+              existing.total += order.total;
+              existing.itemsCount += order.itemsCount;
+              existing.orderIds.push(order.id);
+            } else {
+              // Primera vez que vemos esta transacción POS
+              posTransactionsMap.set(transactionId, {
+                ...order,
+                orders: [order],
+                orderIds: [order.id],
+                // Mantener la información de la primera transacción POS
+                posTransactionId: order.posTransactionId,
+                posTransactionIdString: order.posTransactionIdString,
+                posTransactionDateTime: order.posTransactionDateTime,
+                posResponse: order.posResponse,
+                posRefundTransactionId: order.posRefundTransactionId,
+                posRefundTransactionIdString: order.posRefundTransactionIdString,
+                posRefundTransactionDateTime: order.posRefundTransactionDateTime,
+                posRefundResponse: order.posRefundResponse,
+                posRefundedAt: order.posRefundedAt,
+                // Usar la fecha más antigua
+                createdAt: order.createdAt,
+                // Combinar información de clientes/mesas
+                customerNames: order.customerName ? [order.customerName] : [],
+                tableIds: order.tableId ? [order.tableId] : []
+              });
+            }
+          } else {
+            // Pedidos que no son POS, agregarlos directamente
+            nonPosOrders.push(order);
+          }
+        });
+
+        // Convertir el mapa a array y agregar los pedidos no POS
+        groupedOrders.push(...Array.from(posTransactionsMap.values()));
+        groupedOrders.push(...nonPosOrders);
+        
+        // Ordenar por fecha (más reciente primero)
+        groupedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        movements.orders = groupedOrders;
+      }
+      
       setCashRegisterMovements(movements);
     } catch (error) {
       showToast('Error al cargar los movimientos de la caja', 'error');
@@ -203,7 +261,16 @@ export default function ReportsPage() {
       return;
     }
 
-    if (!confirm(`¿Está seguro que desea hacer la devolución de la transacción POS?\n\nPedido: #${order.id}\nMonto: $${order.total.toFixed(2)}\nTransaction ID: ${order.posTransactionId || order.posTransactionIdString}`)) {
+    // Si hay múltiples pedidos agrupados, usar el primero para obtener la información
+    const firstOrder = order.orders && order.orders.length > 0 ? order.orders[0] : order;
+    const orderIds = order.orderIds || [order.id];
+    const orderCount = order.orders ? order.orders.length : 1;
+
+    const confirmMessage = orderCount > 1
+      ? `¿Está seguro que desea hacer la devolución de la transacción POS?\n\n${orderCount} pedidos agrupados (IDs: ${orderIds.join(', ')})\nMonto total: $${order.total.toFixed(2)}\nTransaction ID: ${order.posTransactionId || order.posTransactionIdString}`
+      : `¿Está seguro que desea hacer la devolución de la transacción POS?\n\nPedido: #${order.id}\nMonto: $${order.total.toFixed(2)}\nTransaction ID: ${order.posTransactionId || order.posTransactionIdString}`;
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -222,19 +289,65 @@ export default function ReportsPage() {
           : idStr.padStart(4, '0');
       }
 
-      // Enviar devolución con toda la información disponible
+      // Enviar devolución con el monto total y la información de la primera transacción
       const result = await api.sendPOSVoid(
-        order.total, 
-        order.posTransactionDateTime,
-        order.id, // OrderId para que el backend pueda obtener más información
+        order.total, // Monto total de todos los pedidos agrupados
+        order.posTransactionDateTime || firstOrder.posTransactionDateTime,
+        firstOrder.id, // OrderId del primer pedido para que el backend pueda obtener más información
         ticketNumber
       );
 
       if (result.success) {
-        showToast('Devolución POS procesada exitosamente', 'success');
+        showToast(`Devolución POS procesada exitosamente${orderCount > 1 ? ` para ${orderCount} pedidos` : ''}`, 'success');
         // Recargar movimientos para actualizar la vista
         if (cashRegisterMovements?.cashRegister?.id) {
           const movements = await api.getCashRegisterMovements(cashRegisterMovements.cashRegister.id);
+          // Re-aplicar el agrupamiento
+          if (movements.orders) {
+            const groupedOrders: any[] = [];
+            const posTransactionsMap = new Map<string, any>();
+            const nonPosOrders: any[] = [];
+
+            movements.orders.forEach((o: any) => {
+              if (o.paymentMethod?.toLowerCase() === 'pos' && (o.posTransactionId || o.posTransactionIdString)) {
+                const transactionId = o.posTransactionId?.toString() || o.posTransactionIdString || '';
+                
+                if (posTransactionsMap.has(transactionId)) {
+                  const existing = posTransactionsMap.get(transactionId);
+                  existing.orders.push(o);
+                  existing.total += o.total;
+                  existing.itemsCount += o.itemsCount;
+                  existing.orderIds.push(o.id);
+                } else {
+                  posTransactionsMap.set(transactionId, {
+                    ...o,
+                    orders: [o],
+                    orderIds: [o.id],
+                    posTransactionId: o.posTransactionId,
+                    posTransactionIdString: o.posTransactionIdString,
+                    posTransactionDateTime: o.posTransactionDateTime,
+                    posResponse: o.posResponse,
+                    posRefundTransactionId: o.posRefundTransactionId,
+                    posRefundTransactionIdString: o.posRefundTransactionIdString,
+                    posRefundTransactionDateTime: o.posRefundTransactionDateTime,
+                    posRefundResponse: o.posRefundResponse,
+                    posRefundedAt: o.posRefundedAt,
+                    createdAt: o.createdAt,
+                    customerNames: o.customerName ? [o.customerName] : [],
+                    tableIds: o.tableId ? [o.tableId] : []
+                  });
+                }
+              } else {
+                nonPosOrders.push(o);
+              }
+            });
+
+            groupedOrders.push(...Array.from(posTransactionsMap.values()));
+            groupedOrders.push(...nonPosOrders);
+            groupedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            movements.orders = groupedOrders;
+          }
           setCashRegisterMovements(movements);
         }
       } else {
@@ -973,7 +1086,22 @@ export default function ReportsPage() {
                             {new Date(order.createdAt).toLocaleString('es-ES')}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            {order.customerName ? (
+                            {order.orders && order.orders.length > 1 ? (
+                              // Múltiples pedidos agrupados por transacción POS
+                              <div>
+                                <div className="font-medium text-gray-800">
+                                  {order.orders.length} pedido{order.orders.length > 1 ? 's' : ''} agrupados
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {order.customerNames && order.customerNames.length > 0 && (
+                                    <div>Clientes: {order.customerNames.join(', ')}</div>
+                                  )}
+                                  {order.tableIds && order.tableIds.length > 0 && (
+                                    <div>Mesas: {order.tableIds.map((id: number) => `#${id}`).join(', ')}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : order.customerName ? (
                               <div>
                                 <div className="font-medium text-gray-800">{order.customerName}</div>
                                 {order.customerPhone && (
@@ -988,6 +1116,11 @@ export default function ReportsPage() {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {order.itemsCount} {order.itemsCount === 1 ? 'item' : 'items'}
+                            {order.orders && order.orders.length > 1 && (
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                ({order.orders.length} pedido{order.orders.length > 1 ? 's' : ''})
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
