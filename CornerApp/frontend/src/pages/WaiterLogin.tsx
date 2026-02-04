@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast/ToastContext';
-import { LogIn, Lock, User, Utensils } from 'lucide-react';
+import { LogIn, Lock, User, Utensils, Store } from 'lucide-react';
 import Logo from '../components/Logo/Logo';
 
 export default function WaiterLoginPage() {
+  const [restaurantId, setRestaurantId] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,6 +20,17 @@ export default function WaiterLoginPage() {
       return;
     }
 
+    if (!restaurantId) {
+      showToast('El ID del restaurante es requerido', 'error');
+      return;
+    }
+
+    const restaurantIdNum = parseInt(restaurantId, 10);
+    if (isNaN(restaurantIdNum) || restaurantIdNum <= 0) {
+      showToast('El ID del restaurante debe ser un número válido', 'error');
+      return;
+    }
+
     try {
       setLoading(true);
       
@@ -27,7 +39,7 @@ export default function WaiterLoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ restaurantId: restaurantIdNum, username, password }),
       });
 
       if (!response.ok) {
@@ -109,6 +121,30 @@ export default function WaiterLoginPage() {
 
           {/* Formulario */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ID Restaurante */}
+            <div>
+              <label htmlFor="restaurantId" className="block text-sm font-semibold text-white mb-2">
+                ID del Restaurante <span className="text-gray-400 text-xs">(requerido)</span>
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Store size={20} className="text-gray-400 group-focus-within:text-primary-500 transition-colors" />
+                </div>
+                <input
+                  id="restaurantId"
+                  type="number"
+                  value={restaurantId}
+                  onChange={(e) => setRestaurantId(e.target.value)}
+                  className="block w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all outline-none text-gray-900 placeholder-gray-400"
+                  placeholder="Ingresa el ID del restaurante"
+                  autoComplete="off"
+                  disabled={loading}
+                  min="1"
+                  required
+                />
+              </div>
+            </div>
+
             {/* Usuario */}
             <div>
               <label htmlFor="username" className="block text-sm font-semibold text-white mb-2">
