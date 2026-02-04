@@ -614,13 +614,15 @@ public class AdminDeliveryPersonsController : ControllerBase
             query = query.Where(o => o.CreatedAt >= openCashRegister.OpenedAt);
         }
 
-        // Si includeCompleted es false, solo mostrar activos
+        // Si includeCompleted es false, solo mostrar activos (no completados ni cancelados)
+        // Si includeCompleted es true, mostrar todos (incluyendo completados y cancelados)
         if (!includeCompleted && openCashRegister == null)
         {
             query = query.Where(o => 
                 o.Status != OrderConstants.STATUS_COMPLETED && 
                 o.Status != OrderConstants.STATUS_CANCELLED);
         }
+        // Si includeCompleted es true, no filtrar por estado (mostrar todos)
 
         var orders = await query
             .OrderByDescending(o => o.CreatedAt)

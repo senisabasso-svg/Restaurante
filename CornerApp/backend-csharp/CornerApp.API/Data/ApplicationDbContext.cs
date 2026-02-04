@@ -438,7 +438,7 @@ public class ApplicationDbContext : DbContext
             
             // Relación con Restaurant
             entity.HasOne(e => e.Restaurant)
-                  .WithMany()
+                  .WithMany(r => r.DeliveryCashRegisters)
                   .HasForeignKey(e => e.RestaurantId)
                   .OnDelete(DeleteBehavior.Cascade);
             

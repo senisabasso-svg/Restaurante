@@ -25,6 +25,8 @@ export default function DeliveryPersonsManagementPage() {
   const [cashRegisterMovements, setCashRegisterMovements] = useState<any>(null);
   const [isMovementsModalOpen, setIsMovementsModalOpen] = useState(false);
   const [orderFilter, setOrderFilter] = useState<'all' | 'preparing' | 'delivering' | 'completed' | 'cancelled'>('all');
+  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [isCancelOrderModalOpen, setIsCancelOrderModalOpen] = useState(false);
   
   // Order creation state
   const [products, setProducts] = useState<Product[]>([]);
@@ -371,10 +373,8 @@ export default function DeliveryPersonsManagementPage() {
   const openDetailsModal = async (deliveryPerson: DeliveryPerson) => {
     setSelectedDeliveryPerson(deliveryPerson);
     setIsDetailsModalOpen(true);
-    // Si hay caja abierta, mostrar todos los pedidos (incluyendo completados)
-    const status = cashRegisterStatuses[deliveryPerson.id];
-    const includeCompleted = status?.isOpen || false;
-    await loadDeliveryPersonOrders(deliveryPerson.id, includeCompleted);
+    // Siempre cargar todos los pedidos (activos e históricos) para poder cancelarlos si es necesario
+    await loadDeliveryPersonOrders(deliveryPerson.id, true);
   };
 
   const loadDeliveryPersonOrders = async (deliveryPersonId: number, includeCompleted: boolean = false) => {
@@ -384,6 +384,25 @@ export default function DeliveryPersonsManagementPage() {
     } catch (error) {
       console.error('Error al cargar pedidos:', error);
       setDeliveryPersonOrders([]);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!orderToCancel || !selectedDeliveryPerson) return;
+
+    try {
+      await api.updateOrderStatus(orderToCancel.id, 'cancelled');
+      showToast('Pedido cancelado exitosamente', 'success');
+      setIsCancelOrderModalOpen(false);
+      setOrderToCancel(null);
+      
+      // Recargar pedidos del repartidor
+      await loadDeliveryPersonOrders(selectedDeliveryPerson.id, true);
+      
+      // Recargar datos generales
+      await loadData();
+    } catch (error: any) {
+      showToast(error.message || 'Error al cancelar el pedido', 'error');
     }
   };
 
@@ -1035,7 +1054,7 @@ export default function DeliveryPersonsManagementPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium">
-                  Pedidos {cashRegisterStatuses[selectedDeliveryPerson.id]?.isOpen ? 'de esta sesión' : 'Asignados'}
+                  Pedidos Asignados (Todos)
                 </h4>
                 {deliveryPersonOrders.length > 0 && (
                   <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
@@ -1143,6 +1162,21 @@ export default function DeliveryPersonsManagementPage() {
                                   </p>
                                 </div>
                               )}
+                              {/* Botón de cancelar para pedidos activos */}
+                              {(order.status === 'preparing' || order.status === 'delivering') && (
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <button
+                                    onClick={() => {
+                                      setOrderToCancel(order);
+                                      setIsCancelOrderModalOpen(true);
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 text-sm font-medium transition-colors"
+                                  >
+                                    <XCircle size={16} />
+                                    Cancelar Pedido
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1155,6 +1189,25 @@ export default function DeliveryPersonsManagementPage() {
           </div>
         )}
       </Modal>
+
+      {/* Cancel Order Modal */}
+      <ConfirmModal
+        isOpen={isCancelOrderModalOpen}
+        onClose={() => {
+          setIsCancelOrderModalOpen(false);
+          setOrderToCancel(null);
+        }}
+        onConfirm={handleCancelOrder}
+        title="Cancelar Pedido"
+        message={
+          orderToCancel
+            ? `¿Estás seguro de que deseas cancelar el pedido #${orderToCancel.id} de ${orderToCancel.customerName}?`
+            : '¿Estás seguro de que deseas cancelar este pedido?'
+        }
+        confirmText="Cancelar Pedido"
+        cancelText="No Cancelar"
+        confirmButtonClass="bg-red-500 hover:bg-red-600"
+      />
 
       {/* Close Cash Register Modal */}
       <Modal

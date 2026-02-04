@@ -792,6 +792,51 @@ public class AdminOrdersController : ControllerBase
                 return BadRequest(new { error = "Debe asignar un repartidor antes de poner en camino" });
             }
 
+            // Si se completa un pedido de delivery con repartidor asignado, actualizar la caja del repartidor
+            if (request.Status == OrderConstants.STATUS_COMPLETED && order.DeliveryPersonId.HasValue && !order.TableId.HasValue)
+            {
+                // Buscar la caja abierta del repartidor (del mismo restaurante)
+                var openCashRegister = await _context.DeliveryCashRegisters
+                    .Where(c => c.DeliveryPersonId == order.DeliveryPersonId.Value 
+                             && c.RestaurantId == restaurantId 
+                             && c.IsOpen)
+                    .FirstOrDefaultAsync();
+
+                if (openCashRegister != null)
+                {
+                    // Obtener todos los pedidos completados de esta sesión de caja
+                    var completedOrders = await _context.Orders
+                        .Where(o => o.DeliveryPersonId == order.DeliveryPersonId.Value
+                                 && o.RestaurantId == restaurantId
+                                 && o.CreatedAt >= openCashRegister.OpenedAt
+                                 && o.Status == OrderConstants.STATUS_COMPLETED
+                                 && !o.IsArchived)
+                        .ToListAsync();
+
+                    // Calcular totales actualizados
+                    var totalSales = completedOrders.Sum(o => o.Total);
+                    var totalCash = completedOrders
+                        .Where(o => o.PaymentMethod?.ToLower() == PaymentConstants.METHOD_CASH.ToLower())
+                        .Sum(o => o.Total);
+                    var totalPOS = completedOrders
+                        .Where(o => o.PaymentMethod?.ToLower() == PaymentConstants.METHOD_POS.ToLower())
+                        .Sum(o => o.Total);
+                    var totalTransfer = completedOrders
+                        .Where(o => o.PaymentMethod?.ToLower() == PaymentConstants.METHOD_TRANSFER.ToLower())
+                        .Sum(o => o.Total);
+
+                    // Actualizar la caja del repartidor
+                    openCashRegister.TotalSales = totalSales;
+                    openCashRegister.TotalCash = totalCash;
+                    openCashRegister.TotalPOS = totalPOS;
+                    openCashRegister.TotalTransfer = totalTransfer;
+                    openCashRegister.UpdatedAt = DateTime.UtcNow;
+
+                    _logger.LogInformation("Caja de repartidor {DeliveryPersonId} actualizada: Total ventas: {TotalSales}", 
+                        order.DeliveryPersonId.Value, totalSales);
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             // Invalidar cache de estadísticas ya que cambió un pedido

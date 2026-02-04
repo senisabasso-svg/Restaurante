@@ -245,7 +245,9 @@ export default function KitchenPage() {
       showToast('Selecciona un repartidor', 'error');
       return;
     }
-    await handleStatusChange(selectedOrder, 'delivering', selectedDeliveryPersonId);
+    // Para pedidos de delivery desde cocina, marcar directamente como completado
+    // Esto carga el pedido automáticamente en la caja del repartidor
+    await handleStatusChange(selectedOrder, 'completed', selectedDeliveryPersonId);
     setIsAssignModalOpen(false);
     setSelectedOrder(null);
     setSelectedDeliveryPersonId(null);

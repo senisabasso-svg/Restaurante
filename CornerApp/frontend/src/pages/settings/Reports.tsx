@@ -11,7 +11,6 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  Users,
   Truck,
   FileSpreadsheet,
   Award,
@@ -47,7 +46,6 @@ import type {
   RevenueByPaymentMethod,
   ComparisonData,
   PeakHoursData,
-  TopCustomer,
   DeliveryPerformance,
   CashRegistersReport
 } from '../../types';
@@ -132,7 +130,6 @@ export default function ReportsPage() {
   const [revenueByPayment, setRevenueByPayment] = useState<RevenueByPaymentMethod[]>([]);
   const [comparison, setComparison] = useState<ComparisonData | null>(null);
   const [peakHours, setPeakHours] = useState<PeakHoursData | null>(null);
-  const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [deliveryPerformance, setDeliveryPerformance] = useState<DeliveryPerformance[]>([]);
   const [cashRegistersReport, setCashRegistersReport] = useState<CashRegistersReport | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -154,14 +151,13 @@ export default function ReportsPage() {
   const loadReports = async () => {
     try {
       setLoading(true);
-      const [revenue, products, statistics, paymentRevenue, comp, hours, customers, delivery, cashRegisters] = await Promise.all([
+      const [revenue, products, statistics, paymentRevenue, comp, hours, delivery, cashRegisters] = await Promise.all([
         api.getRevenueReport(period),
         api.getTopProducts(period, 10),
         api.getReportStats(period),
         api.getRevenueByPaymentMethod(period),
         api.getComparison(period),
         api.getPeakHours(period),
-        api.getTopCustomers(period, 5),
         api.getDeliveryPerformance(period),
         api.getCashRegistersReport(period),
       ]);
@@ -171,7 +167,6 @@ export default function ReportsPage() {
       setRevenueByPayment(paymentRevenue);
       setComparison(comp);
       setPeakHours(hours);
-      setTopCustomers(customers);
       setDeliveryPerformance(delivery);
       setCashRegistersReport(cashRegisters);
     } catch (error) {
@@ -706,39 +701,6 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Top Clientes */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Users size={20} className="text-primary-500" />
-            Top Clientes VIP
-          </h2>
-          
-          {topCustomers.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No hay datos para este período</p>
-          ) : (
-            <div className="space-y-3">
-              {topCustomers.map((customer, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className={`w-8 h-8 flex items-center justify-center rounded-full text-white font-bold ${
-                    index === 0 ? 'bg-yellow-500' :
-                    index === 1 ? 'bg-gray-400' :
-                    index === 2 ? 'bg-amber-600' :
-                    'bg-primary-400'
-                  }`}>
-                    {index === 0 ? '👑' : index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{customer.customerName}</p>
-                    <p className="text-xs text-gray-500">{customer.ordersCount} pedidos</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-green-600">{formatCurrency(customer.totalSpent)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Rendimiento de Repartidores */}
