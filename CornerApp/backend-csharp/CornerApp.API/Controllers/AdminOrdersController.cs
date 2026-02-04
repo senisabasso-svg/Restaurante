@@ -43,6 +43,7 @@ public class AdminOrdersController : ControllerBase
     private const string POS_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchase";
     private const string POS_VOID_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchaseRefund";
     private const string POS_QUERY_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchaseQuery";
+    private const string POS_REVERSE_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialReverse";
     
     // Valores por defecto para POS (si el restaurante no tiene configuración)
     private const string DEFAULT_POS_ID = "22224628";
@@ -1206,6 +1207,16 @@ public class AdminOrdersController : ControllerBase
   ""InvoiceAmount"": ""1420000""
 }}";
 
+            // Log del JSON que se envía al POSLink (ITD)
+            _logger.LogInformation("📤 [POS] Enviando transacción al POSLink (ITD). URL: {Url}", POS_API_URL);
+            _logger.LogInformation("📤 [POS] JSON de transacción enviado:\n{Json}", jsonContent);
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("📤 [POS] ENVIANDO TRANSACCIÓN AL POSLINK (ITD)");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine($"URL: {POS_API_URL}");
+            Console.WriteLine($"JSON Enviado:\n{jsonContent}");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.Timeout = TimeSpan.FromSeconds(30);
             
@@ -1217,6 +1228,16 @@ public class AdminOrdersController : ControllerBase
 
             var response = await httpClient.PostAsync(POS_API_URL, content);
             var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Log de la respuesta recibida del POSLink
+            _logger.LogInformation("📥 [POS] Respuesta recibida del POSLink. Status: {Status}", response.StatusCode);
+            _logger.LogInformation("📥 [POS] Respuesta JSON:\n{Response}", responseContent);
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("📥 [POS] RESPUESTA RECIBIDA DEL POSLINK (ITD)");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine($"Status Code: {response.StatusCode}");
+            Console.WriteLine($"Respuesta JSON:\n{responseContent}");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -1302,7 +1323,8 @@ public class AdminOrdersController : ControllerBase
                 transactionId = transactionId,
                 sTransactionId = sTransactionId,
                 transactionDateTime = transactionDateTime,
-                response = responseContent 
+                requestJson = jsonContent, // JSON enviado al ITD
+                response = responseContent // Respuesta recibida del ITD
             });
         }
         catch (Exception ex)
@@ -1692,6 +1714,7 @@ public class AdminOrdersController : ControllerBase
             // La respuesta del POS viene como: {"ResponseCode":10,"RemainingExpirationTime":238.0,...}
             int statusCode = -1;
             string statusMessage = "Error no determinado";
+            double? remainingExpirationTime = null;
             try
             {
                 var responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
@@ -1735,6 +1758,22 @@ public class AdminOrdersController : ControllerBase
                         statusCode = parsedCode;
                 }
 
+                // Buscar RemainingExpirationTime (importante para determinar cuándo hacer reverso)
+                if (responseJson.TryGetProperty("RemainingExpirationTime", out var remainingTimeElement))
+                {
+                    if (remainingTimeElement.ValueKind == JsonValueKind.Number)
+                        remainingExpirationTime = remainingTimeElement.GetDouble();
+                    else if (remainingTimeElement.ValueKind == JsonValueKind.String && double.TryParse(remainingTimeElement.GetString(), out var parsedTime))
+                        remainingExpirationTime = parsedTime;
+                }
+                else if (responseJson.TryGetProperty("remainingExpirationTime", out var remainingTimeElementCamel))
+                {
+                    if (remainingTimeElementCamel.ValueKind == JsonValueKind.Number)
+                        remainingExpirationTime = remainingTimeElementCamel.GetDouble();
+                    else if (remainingTimeElementCamel.ValueKind == JsonValueKind.String && double.TryParse(remainingTimeElementCamel.GetString(), out var parsedTime))
+                        remainingExpirationTime = parsedTime;
+                }
+
                 // Obtener el mensaje de la codiguera
                 statusMessage = GetPOSStatusCodeMessage(statusCode);
             }
@@ -1772,6 +1811,7 @@ public class AdminOrdersController : ControllerBase
                 isCompleted = isCompleted,
                 isPending = isPending,
                 isError = isError,
+                remainingExpirationTime = remainingExpirationTime,
                 response = responseContent 
             });
         }
@@ -1779,6 +1819,224 @@ public class AdminOrdersController : ControllerBase
         {
             _logger.LogError(ex, "Error al consultar transacción POS");
             return StatusCode(500, new { error = "Error al consultar transacción POS", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Envía un reverso al POS externo
+    /// El reverso se utiliza para dejar sin efecto la última transacción que no ha podido ser completada
+    /// (cuando no se recibió el mensaje de respuesta desde el POS)
+    /// </summary>
+    [HttpPost("pos/reverse")]
+    public async Task<ActionResult> SendPOSReverse([FromBody] POSReverseRequest request)
+    {
+        try
+        {
+            // Obtener información del pedido original si se proporciona OrderId
+            Order? originalOrder = null;
+            if (request.OrderId.HasValue)
+            {
+                var restaurantId = RestaurantHelper.GetRestaurantId(User);
+                originalOrder = await _context.Orders
+                    .FirstOrDefaultAsync(o => o.Id == request.OrderId.Value && o.RestaurantId == restaurantId);
+                
+                if (originalOrder == null)
+                {
+                    return BadRequest(new { error = "Pedido no encontrado" });
+                }
+
+                // Verificar si ya existe un reverso para este pedido
+                if (originalOrder.POSReverseTransactionId != null || !string.IsNullOrWhiteSpace(originalOrder.POSReverseTransactionIdString))
+                {
+                    return BadRequest(new { 
+                        error = "Este pedido ya tiene un reverso procesado",
+                        reverseTransactionId = originalOrder.POSReverseTransactionId ?? (long.TryParse(originalOrder.POSReverseTransactionIdString, out var parsedId) ? parsedId : null),
+                        reverseTransactionIdString = originalOrder.POSReverseTransactionIdString,
+                        reversedAt = originalOrder.POSReversedAt
+                    });
+                }
+
+                // Verificar que el pedido tenga una transacción POS original
+                if (originalOrder.POSTransactionId == null && string.IsNullOrWhiteSpace(originalOrder.POSTransactionIdString))
+                {
+                    return BadRequest(new { error = "Este pedido no tiene una transacción POS original para reversar" });
+                }
+            }
+
+            // Obtener TransactionId y STransactionId
+            long? transactionId = null;
+            string? sTransactionId = null;
+            string? transactionDateTime = null;
+
+            if (request.TransactionId.HasValue || !string.IsNullOrWhiteSpace(request.STransactionId))
+            {
+                transactionId = request.TransactionId ?? (long.TryParse(request.STransactionId, out var parsed) ? parsed : null);
+                sTransactionId = request.STransactionId ?? request.TransactionId?.ToString();
+                transactionDateTime = request.TransactionDateTime;
+            }
+            else if (originalOrder != null)
+            {
+                transactionId = originalOrder.POSTransactionId;
+                sTransactionId = originalOrder.POSTransactionIdString ?? originalOrder.POSTransactionId?.ToString();
+                transactionDateTime = originalOrder.POSTransactionDateTime;
+            }
+            else
+            {
+                return BadRequest(new { error = "TransactionId o STransactionId es requerido, o proporcione OrderId" });
+            }
+
+            if (transactionId == null && string.IsNullOrWhiteSpace(sTransactionId))
+            {
+                return BadRequest(new { error = "TransactionId inválido" });
+            }
+
+            if (string.IsNullOrWhiteSpace(transactionDateTime))
+            {
+                // Si no se proporciona, usar la fecha del pedido o actual
+                if (originalOrder != null)
+                {
+                    transactionDateTime = originalOrder.POSTransactionDateTime ?? originalOrder.CreatedAt.ToString("yyyyMMddHHmmssfff");
+                }
+                else
+                {
+                    transactionDateTime = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+                }
+            }
+
+            // Fecha/hora del reverso (actual)
+            var now = DateTime.UtcNow;
+            var reverseTransactionDateTime = now.ToString("yyyyMMddHHmmssfff");
+
+            // Obtener configuración POS del restaurante
+            var posConfig = await GetPOSConfigAsync();
+
+            // Crear el JSON según la documentación
+            var jsonContent = $@"{{
+  ""PosID"": ""{posConfig.PosId}"",
+  ""SystemId"": ""{posConfig.SystemId}"",
+  ""Branch"": ""{posConfig.Branch}"",
+  ""ClientAppId"": ""{posConfig.ClientAppId}"",
+  ""UserId"": ""1"",
+  ""TransactionDateTimeyyyyMMddHHmmssSSS"": ""{reverseTransactionDateTime}"",
+  ""TransactionId"": {transactionId ?? 0},
+  ""STransactionId"": ""{sTransactionId ?? "0"}""
+}}";
+
+            // Log del JSON que se envía al POSLink (ITD) para reverso
+            _logger.LogInformation("🔄 [POS] Enviando reverso al POSLink (ITD). URL: {Url}", POS_REVERSE_API_URL);
+            _logger.LogInformation("🔄 [POS] JSON de reverso enviado:\n{Json}", jsonContent);
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("🔄 [POS] ENVIANDO REVERSO AL POSLINK (ITD)");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine($"URL: {POS_REVERSE_API_URL}");
+            Console.WriteLine($"JSON Enviado:\n{jsonContent}");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+
+            var httpClient = _httpClientFactory.CreateClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(30);
+            
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json")
+            {
+                CharSet = "UTF-8"
+            };
+
+            var response = await httpClient.PostAsync(POS_REVERSE_API_URL, content);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Log de la respuesta recibida del POSLink para reverso
+            _logger.LogInformation("📥 [POS] Respuesta de reverso recibida del POSLink. Status: {Status}", response.StatusCode);
+            _logger.LogInformation("📥 [POS] Respuesta JSON de reverso:\n{Response}", responseContent);
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("📥 [POS] RESPUESTA DE REVERSO RECIBIDA DEL POSLINK (ITD)");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine($"Status Code: {response.StatusCode}");
+            Console.WriteLine($"Respuesta JSON:\n{responseContent}");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Error al enviar reverso POS. Status: {Status}, Response: {Response}", 
+                    response.StatusCode, responseContent);
+                return StatusCode((int)response.StatusCode, new { 
+                    error = "Error al comunicarse con el POS para reverso", 
+                    details = responseContent 
+                });
+            }
+
+            // Parsear la respuesta para verificar el código
+            int? responseCode = null;
+            bool isSuccess = false;
+
+            try
+            {
+                var responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                if (responseJson.TryGetProperty("ResponseCode", out var responseCodeElement))
+                {
+                    responseCode = responseCodeElement.GetInt32();
+                    var statusMessage = GetPOSStatusCodeMessage(responseCode.Value);
+                    
+                    _logger.LogInformation("Reverso POS enviado. TransactionId: {TransactionId}, ResponseCode: {ResponseCode}, Mensaje: {Message}, Response: {Response}", 
+                        transactionId, responseCode, statusMessage, responseContent);
+
+                    // Solo considerar exitoso si el código es 0 o 100
+                    isSuccess = responseCode == 0 || responseCode == 100;
+
+                    if (isSuccess)
+                    {
+                        // Guardar información del reverso en el pedido si existe
+                        if (originalOrder != null)
+                        {
+                            originalOrder.POSReverseTransactionId = transactionId;
+                            originalOrder.POSReverseTransactionIdString = sTransactionId;
+                            originalOrder.POSReverseResponse = responseContent;
+                            originalOrder.POSReversedAt = DateTime.UtcNow;
+                            originalOrder.UpdatedAt = DateTime.UtcNow;
+
+                            await _context.SaveChangesAsync();
+                            _logger.LogInformation("Información de reverso guardada en pedido {OrderId}", originalOrder.Id);
+                        }
+
+                        return Ok(new { 
+                            success = true, 
+                            message = "Reverso POS enviado exitosamente",
+                            responseCode = responseCode,
+                            requestJson = jsonContent, // JSON enviado al ITD
+                            response = responseContent // Respuesta recibida del ITD
+                        });
+                    }
+                    else
+                    {
+                        return Ok(new { 
+                            success = false, 
+                            message = $"Reverso POS procesado con código: {responseCode} - {statusMessage}",
+                            responseCode = responseCode,
+                            requestJson = jsonContent, // JSON enviado al ITD
+                            response = responseContent // Respuesta recibida del ITD
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "No se pudo parsear la respuesta del POS. Response: {Response}", responseContent);
+            }
+
+            _logger.LogInformation("Reverso POS enviado exitosamente. TransactionId: {TransactionId}, Response: {Response}", 
+                transactionId, responseContent);
+
+            return Ok(new { 
+                success = true, 
+                message = "Reverso POS enviado exitosamente",
+                responseCode = responseCode,
+                requestJson = jsonContent, // JSON enviado al ITD
+                response = responseContent // Respuesta recibida del ITD
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al enviar reverso POS");
+            return StatusCode(500, new { error = "Error al enviar reverso POS", details = ex.Message });
         }
     }
 
@@ -1849,4 +2107,12 @@ public class POSQueryRequest
     public long? TransactionId { get; set; }
     public string? STransactionId { get; set; }
     public string TransactionDateTime { get; set; } = string.Empty;
+}
+
+public class POSReverseRequest
+{
+    public long? TransactionId { get; set; }
+    public string? STransactionId { get; set; }
+    public string? TransactionDateTime { get; set; } // TransactionDateTime de la transacción original (yyyyMMddHHmmssSSS)
+    public int? OrderId { get; set; } // ID del pedido para obtener información de la transacción original
 }

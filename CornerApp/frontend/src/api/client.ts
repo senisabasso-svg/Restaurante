@@ -282,7 +282,14 @@ class ApiClient {
   }
 
   async sendPOSTransaction(amount: number) {
-    console.log('📤 [POS] Enviando transacción al POS:', { amount });
+    const requestBody = { amount };
+    
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📤 [POS FRONTEND] Enviando transacción al backend');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('Endpoint: /admin/api/pos/transaction');
+    console.log('JSON enviado al backend:', JSON.stringify(requestBody, null, 2));
+    console.log('═══════════════════════════════════════════════════════════');
     
     const response = await this.request<{ 
       success: boolean; 
@@ -290,21 +297,42 @@ class ApiClient {
       transactionId?: number;
       sTransactionId?: string;
       transactionDateTime?: string;
-      response?: string;
+      requestJson?: string; // JSON enviado al ITD
+      response?: string; // Respuesta recibida del ITD
     }>('/admin/api/pos/transaction', {
       method: 'POST',
-      body: { amount },
+      body: requestBody,
     });
     
-    console.log('✅ [POS] Respuesta del POST al POS:', {
-      success: response.success,
-      message: response.message,
-      transactionId: response.transactionId,
-      sTransactionId: response.sTransactionId,
-      transactionDateTime: response.transactionDateTime,
-      response: response.response,
-      respuestaCompleta: response
-    });
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📥 [POS FRONTEND] Respuesta recibida del backend');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('Respuesta completa:', JSON.stringify(response, null, 2));
+    if (response.requestJson) {
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📤 JSON ENVIADO AL POSLINK (ITD):');
+      console.log('═══════════════════════════════════════════════════════════');
+      try {
+        const jsonParsed = JSON.parse(response.requestJson);
+        console.log(JSON.stringify(jsonParsed, null, 2));
+      } catch {
+        console.log(response.requestJson);
+      }
+      console.log('═══════════════════════════════════════════════════════════');
+    }
+    if (response.response) {
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📥 RESPUESTA RECIBIDA DEL POSLINK (ITD):');
+      console.log('═══════════════════════════════════════════════════════════');
+      try {
+        const responseParsed = JSON.parse(response.response);
+        console.log(JSON.stringify(responseParsed, null, 2));
+      } catch {
+        console.log(response.response);
+      }
+      console.log('═══════════════════════════════════════════════════════════');
+    }
+    console.log('═══════════════════════════════════════════════════════════');
     
     return response;
   }
@@ -367,6 +395,7 @@ class ApiClient {
       isCompleted: boolean;
       isPending: boolean;
       isError: boolean;
+      remainingExpirationTime?: number | null;
       response?: string;
     }>('/admin/api/pos/query', {
       method: 'POST',
@@ -383,6 +412,84 @@ class ApiClient {
       response: response.response,
       respuestaCompleta: response
     });
+
+    return response;
+  }
+
+  async sendPOSReverse(transactionId?: number | string, transactionDateTime?: string, orderId?: number) {
+    const requestBody: { 
+      transactionId?: number; 
+      sTransactionId?: string; 
+      transactionDateTime?: string;
+      orderId?: number;
+    } = {};
+    
+    if (orderId) {
+      requestBody.orderId = orderId;
+    } else if (transactionId) {
+      if (typeof transactionId === 'number') {
+        requestBody.transactionId = transactionId;
+        requestBody.sTransactionId = transactionId.toString();
+      } else {
+        requestBody.sTransactionId = transactionId;
+        const parsed = parseInt(transactionId, 10);
+        if (!isNaN(parsed)) {
+          requestBody.transactionId = parsed;
+        }
+      }
+      
+      if (transactionDateTime) {
+        requestBody.transactionDateTime = transactionDateTime;
+      }
+    }
+
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔄 [POS FRONTEND] Enviando reverso al backend');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('Endpoint: /admin/api/pos/reverse');
+    console.log('JSON enviado al backend:', JSON.stringify(requestBody, null, 2));
+    console.log('═══════════════════════════════════════════════════════════');
+
+    const response = await this.request<{ 
+      success: boolean; 
+      message: string; 
+      responseCode?: number;
+      requestJson?: string; // JSON enviado al ITD
+      response?: string; // Respuesta recibida del ITD
+    }>('/admin/api/pos/reverse', {
+      method: 'POST',
+      body: requestBody,
+    });
+
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📥 [POS FRONTEND] Respuesta de reverso recibida del backend');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('Respuesta completa:', JSON.stringify(response, null, 2));
+    if (response.requestJson) {
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('🔄 JSON ENVIADO AL POSLINK (ITD) PARA REVERSO:');
+      console.log('═══════════════════════════════════════════════════════════');
+      try {
+        const jsonParsed = JSON.parse(response.requestJson);
+        console.log(JSON.stringify(jsonParsed, null, 2));
+      } catch {
+        console.log(response.requestJson);
+      }
+      console.log('═══════════════════════════════════════════════════════════');
+    }
+    if (response.response) {
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📥 RESPUESTA RECIBIDA DEL POSLINK (ITD) PARA REVERSO:');
+      console.log('═══════════════════════════════════════════════════════════');
+      try {
+        const responseParsed = JSON.parse(response.response);
+        console.log(JSON.stringify(responseParsed, null, 2));
+      } catch {
+        console.log(response.response);
+      }
+      console.log('═══════════════════════════════════════════════════════════');
+    }
+    console.log('═══════════════════════════════════════════════════════════');
 
     return response;
   }

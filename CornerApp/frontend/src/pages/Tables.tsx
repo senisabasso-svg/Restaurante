@@ -653,7 +653,37 @@ export default function TablesPage() {
             if (queryResponse.statusCode === 12) {
               code12Attempts++; // Incrementar contador de código 12
               console.warn(`⚠️ [Tables] Tiempo de transacción excedido (consulta ${code12Attempts}/${maxCode12Attempts}), continuando polling...`);
-              setPosStatusMessage(`⚠️ ${fullMessage} - Consultando nuevamente (${code12Attempts}/${maxCode12Attempts})...`);
+              
+              // Verificar si RemainingExpirationTime = 0 (condición para hacer reverso)
+              const remainingTime = queryResponse.remainingExpirationTime ?? null;
+              if (remainingTime !== null && remainingTime <= 0) {
+                console.warn(`🔄 [Tables] RemainingExpirationTime = 0 detectado. Enviando reverso automáticamente...`);
+                setPosStatusMessage(`⚠️ ${fullMessage} - Tiempo agotado. Enviando reverso...`);
+                
+                try {
+                  // Enviar reverso automáticamente
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  
+                  if (reverseResult.success) {
+                    console.log('✅ [Tables] Reverso enviado exitosamente');
+                    clearInterval(pollInterval);
+                    setIsPOSWaitingModalOpen(false);
+                    showToast('Transacción sin respuesta. Reverso enviado automáticamente para anular la transacción.', 'warning');
+                    reject(new Error(`Transacción sin respuesta. Reverso enviado: ${fullMessage}`));
+                    return;
+                  } else {
+                    console.error('❌ [Tables] Error al enviar reverso:', reverseResult.message);
+                    setPosStatusMessage(`⚠️ ${fullMessage} - Error al enviar reverso: ${reverseResult.message}`);
+                    // Continuar con el flujo normal de error
+                  }
+                } catch (reverseError: any) {
+                  console.error('❌ [Tables] Excepción al enviar reverso:', reverseError);
+                  setPosStatusMessage(`⚠️ ${fullMessage} - Error al enviar reverso`);
+                  // Continuar con el flujo normal de error
+                }
+              } else {
+                setPosStatusMessage(`⚠️ ${fullMessage} - Consultando nuevamente (${code12Attempts}/${maxCode12Attempts})...`);
+              }
              
               // Si ya hicimos 5 consultas adicionales con código 12, mostrar error
               if (code12Attempts >= maxCode12Attempts) {
@@ -695,30 +725,114 @@ export default function TablesPage() {
               // Códigos 10 o 11 indican que debe continuar consultando
               setPosStatusMessage(`Esperando respuesta del POS... (${fullMessage})`);
               
+              // Verificar si RemainingExpirationTime = 0 (condición para hacer reverso en transacciones con promociones)
+              const remainingTime = queryResponse.remainingExpirationTime ?? null;
+              if (remainingTime !== null && remainingTime <= 0 && queryResponse.statusCode === 10) {
+                console.warn(`🔄 [Tables] ResponseCode 10 con RemainingExpirationTime = 0 detectado. Enviando reverso automáticamente...`);
+                setPosStatusMessage(`⚠️ ${fullMessage} - Tiempo agotado. Enviando reverso...`);
+                
+                try {
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  
+                  if (reverseResult.success) {
+                    console.log('✅ [Tables] Reverso enviado exitosamente');
+                    clearInterval(pollInterval);
+                    setIsPOSWaitingModalOpen(false);
+                    showToast('Transacción sin respuesta. Reverso enviado automáticamente para anular la transacción.', 'warning');
+                    reject(new Error(`Transacción sin respuesta. Reverso enviado: ${fullMessage}`));
+                    return;
+                  } else {
+                    console.error('❌ [Tables] Error al enviar reverso:', reverseResult.message);
+                    setPosStatusMessage(`⚠️ ${fullMessage} - Error al enviar reverso: ${reverseResult.message}`);
+                  }
+                } catch (reverseError: any) {
+                  console.error('❌ [Tables] Excepción al enviar reverso:', reverseError);
+                  setPosStatusMessage(`⚠️ ${fullMessage} - Error al enviar reverso`);
+                }
+              }
+              
               // Continuar consultando
               if (attempts >= maxAttempts) {
-                console.error('⏱️ [Tables] Tiempo de espera excedido para la transacción POS');
+                console.error('⏱️ [Tables] Tiempo de espera excedido para la transacción POS. Enviando reverso...');
                 clearInterval(pollInterval);
                 setIsPOSWaitingModalOpen(false);
-                showToast('Tiempo de espera excedido para la transacción POS', 'error');
-                reject(new Error('Tiempo de espera excedido para la transacción POS'));
+                
+                // Enviar reverso cuando se alcanza el máximo de intentos sin respuesta
+                try {
+                  setPosStatusMessage('Tiempo agotado. Enviando reverso...');
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  
+                  if (reverseResult.success) {
+                    showToast('Transacción sin respuesta después de múltiples intentos. Reverso enviado automáticamente.', 'warning');
+                    reject(new Error('Transacción sin respuesta. Reverso enviado automáticamente.'));
+                  } else {
+                    showToast(`Tiempo de espera excedido. Error al enviar reverso: ${reverseResult.message}`, 'error');
+                    reject(new Error('Tiempo de espera excedido para la transacción POS'));
+                  }
+                } catch (reverseError: any) {
+                  console.error('❌ [Tables] Error al enviar reverso después de timeout:', reverseError);
+                  showToast('Tiempo de espera excedido. Error al enviar reverso.', 'error');
+                  reject(new Error('Tiempo de espera excedido para la transacción POS'));
+                }
+                return;
               }
             } else {
               // Estado desconocido, continuar consultando
               if (attempts >= maxAttempts) {
-                console.error('⏱️ [Tables] Tiempo de espera excedido para la transacción POS (estado desconocido)');
+                console.error('⏱️ [Tables] Tiempo de espera excedido para la transacción POS (estado desconocido). Enviando reverso...');
                 clearInterval(pollInterval);
                 setIsPOSWaitingModalOpen(false);
-                showToast(`Tiempo de espera excedido. Estado: ${fullMessage}`, 'error');
-                reject(new Error('Tiempo de espera excedido para la transacción POS'));
+                
+                // Enviar reverso cuando se alcanza el máximo de intentos sin respuesta
+                try {
+                  setPosStatusMessage('Tiempo agotado. Enviando reverso...');
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  
+                  if (reverseResult.success) {
+                    showToast('Transacción sin respuesta después de múltiples intentos. Reverso enviado automáticamente.', 'warning');
+                    reject(new Error(`Transacción sin respuesta. Reverso enviado: ${fullMessage}`));
+                  } else {
+                    showToast(`Tiempo de espera excedido. Error al enviar reverso: ${reverseResult.message}`, 'error');
+                    reject(new Error('Tiempo de espera excedido para la transacción POS'));
+                  }
+                } catch (reverseError: any) {
+                  console.error('❌ [Tables] Error al enviar reverso después de timeout:', reverseError);
+                  showToast('Tiempo de espera excedido. Error al enviar reverso.', 'error');
+                  reject(new Error(`Tiempo de espera excedido para la transacción POS: ${fullMessage}`));
+                }
+                return;
               }
             }
           } catch (error: any) {
             console.error('❌ [Tables] Error al consultar estado de transacción POS:', error);
-            clearInterval(pollInterval);
-            setIsPOSWaitingModalOpen(false);
-            showToast(`Error al consultar estado: ${error.message}`, 'error');
-            reject(new Error(`Error al consultar estado de transacción POS: ${error.message}`));
+            
+            // Si es un error de conexión/timeout y ya hicimos varios intentos, enviar reverso
+            if (attempts >= 10) { // Después de 10 intentos fallidos, considerar que no hay respuesta
+              console.warn('🔄 [Tables] Múltiples errores de conexión detectados. Enviando reverso...');
+              clearInterval(pollInterval);
+              setIsPOSWaitingModalOpen(false);
+              
+              try {
+                setPosStatusMessage('Error de conexión. Enviando reverso...');
+                const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                
+                if (reverseResult.success) {
+                  showToast('Error de conexión con el POS. Reverso enviado automáticamente para anular la transacción.', 'warning');
+                  reject(new Error(`Error de conexión. Reverso enviado: ${error.message}`));
+                } else {
+                  showToast(`Error de conexión. Error al enviar reverso: ${reverseResult.message}`, 'error');
+                  reject(new Error('Error al consultar estado de transacción POS'));
+                }
+              } catch (reverseError: any) {
+                console.error('❌ [Tables] Error al enviar reverso después de error de conexión:', reverseError);
+                showToast(`Error al consultar estado: ${error.message}`, 'error');
+                reject(new Error('Error al consultar estado de transacción POS'));
+              }
+              return;
+            }
+            
+            // Si no es un error repetido, continuar intentando
+            setPosStatusMessage(`Error de conexión. Reintentando... (${attempts}/${maxAttempts})`);
           }
         }, 2000); // Consultar cada 2 segundos
       });
