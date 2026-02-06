@@ -5,6 +5,12 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+// Debug: Verificar que la variable esté configurada
+if (typeof window !== 'undefined') {
+  console.log('VITE_API_URL:', import.meta.env.VITE_API_URL);
+  console.log('API_BASE_URL:', API_BASE_URL);
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: unknown;
