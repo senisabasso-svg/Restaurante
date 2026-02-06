@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using HealthChecks.UI.Client;
@@ -317,8 +319,44 @@ else
 }
 
 // Configurar CORS con optimizaciones
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:3000", "http://localhost:19006", "exp://localhost:19000" };
+// Render puede pasar arrays como JSON string o como variables indexadas
+var allowedOriginsConfig = builder.Configuration.GetSection("Cors:AllowedOrigins");
+var allowedOrigins = new List<string>();
+
+// Intentar leer como array directo
+var originsArray = allowedOriginsConfig.Get<string[]>();
+if (originsArray != null && originsArray.Length > 0)
+{
+    allowedOrigins.AddRange(originsArray);
+}
+else
+{
+    // Intentar leer como string JSON (formato de Render: ["url1", "url2"])
+    var originsJson = builder.Configuration["Cors:AllowedOrigins"] ?? builder.Configuration["Cors__AllowedOrigins"];
+    if (!string.IsNullOrEmpty(originsJson))
+    {
+        try
+        {
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<string[]>(originsJson);
+            if (parsed != null)
+            {
+                allowedOrigins.AddRange(parsed);
+            }
+        }
+        catch
+        {
+            // Si falla el parseo, intentar como string simple
+            allowedOrigins.Add(originsJson.Trim('"', '[', ']'));
+        }
+    }
+}
+
+// Si no hay orígenes configurados, usar valores por defecto
+if (allowedOrigins.Count == 0)
+{
+    allowedOrigins.AddRange(new[] { "http://localhost:3000", "http://localhost:19006", "exp://localhost:19000" });
+}
+
 var allowCredentials = builder.Configuration.GetValue<bool>("Cors:AllowCredentials", false);
 var maxAge = builder.Configuration.GetValue<int>("Cors:MaxAge", 3600); // 1 hora por defecto
 
@@ -339,7 +377,7 @@ builder.Services.AddCors(options =>
         else
         {
             // En producción, solo orígenes específicos con configuración optimizada
-            policy.WithOrigins(allowedOrigins)
+            policy.WithOrigins(allowedOrigins.ToArray())
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .AllowCredentials() // Necesario para SignalR
