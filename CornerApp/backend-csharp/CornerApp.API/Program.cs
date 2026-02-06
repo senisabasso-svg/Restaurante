@@ -251,111 +251,40 @@ Log.Information("Connection string obtenido desde: {Source}",
 
 Log.Information("Connection String configurado (longitud: {Length})", connectionString?.Length ?? 0);
 
-// Detectar tipo de base de datos
-var isPostgreSQL = connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
-    || connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
-    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase);
+// Configurar Entity Framework para SQL Server únicamente
+Log.Information("Configurando Entity Framework para SQL Server 8.0");
 
-var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
-    && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
-
-var isSQLServer = connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase)
-    || connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase)
-    || (!isPostgreSQL && !isSQLite); // Por defecto, usar SQL Server si no se detecta otro tipo
-
-Log.Information("Detección - isPostgreSQL: {IsPostgreSQL}, isSQLite: {IsSQLite}, isSQLServer: {IsSQLServer}", 
-    isPostgreSQL, isSQLite, isSQLServer);
-
-if (isSQLite)
+// Validar el connection string con SqlConnectionStringBuilder
+try
 {
-    // SQLite (desarrollo local)
-    Log.Information("Configurando Entity Framework para SQLite");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseSqlite(connectionString);
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableSensitiveDataLogging();
-            options.EnableDetailedErrors();
-        }
-    });
+    var builderTest = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+    Log.Information("Connection string validado correctamente. Server: {Server}, Database: {Database}, User ID: {UserId}", 
+        builderTest.DataSource ?? builderTest.Server, 
+        builderTest.InitialCatalog ?? builderTest.Database, 
+        builderTest.UserID);
 }
-else if (isPostgreSQL)
+catch (Exception ex)
 {
-    // PostgreSQL (opcional, si se especifica explícitamente)
-    Log.Information("Configurando Entity Framework para PostgreSQL");
-    Log.Information("Connection string para Npgsql (longitud: {Length})", connectionString.Length);
-    
-    // Validar el connection string con NpgsqlConnectionStringBuilder antes de usarlo
-    try
-    {
-        var builderTest = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-        Log.Information("Connection string validado correctamente. Host: {Host}, Port: {Port}, Database: {Database}, Username: {Username}", 
-            builderTest.Host, builderTest.Port, builderTest.Database, builderTest.Username);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "ERROR: El connection string NO es válido para Npgsql. Connection string: {ConnectionString}", connectionString);
-        throw new InvalidOperationException($"El connection string no es válido para Npgsql: {ex.Message}", ex);
-    }
-    
-    var validatedConnectionString = connectionString.Trim();
-    
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseNpgsql(validatedConnectionString, npgsqlOptions =>
-        {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
-            npgsqlOptions.CommandTimeout(30);
-        });
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableSensitiveDataLogging();
-            options.EnableDetailedErrors();
-        }
-        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
-    });
+    Log.Warning(ex, "Advertencia: No se pudo validar el connection string con SqlConnectionStringBuilder. Continuando de todas formas.");
 }
-else
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // SQL Server (opción por defecto para producción en Linux)
-    Log.Information("Configurando Entity Framework para SQL Server (opción por defecto)");
-    
-    // Validar el connection string con SqlConnectionStringBuilder
-    try
+    options.UseSqlServer(connectionString, sqlOptions =>
     {
-        var builderTest = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
-        Log.Information("Connection string validado correctamente. Server: {Server}, Database: {Database}, User ID: {UserId}", 
-            builderTest.DataSource ?? builderTest.Server, 
-            builderTest.InitialCatalog ?? builderTest.Database, 
-            builderTest.UserID);
-    }
-    catch (Exception ex)
-    {
-        Log.Warning(ex, "Advertencia: No se pudo validar el connection string con SqlConnectionStringBuilder. Continuando de todas formas.");
-    }
-    
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseSqlServer(connectionString, sqlOptions =>
-        {
-            sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorNumbersToAdd: null);
-            sqlOptions.CommandTimeout(30);
-        });
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableSensitiveDataLogging();
-            options.EnableDetailedErrors();
-        }
-        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorNumbersToAdd: null);
+        sqlOptions.CommandTimeout(30);
     });
-}
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging();
+        options.EnableDetailedErrors();
+    }
+    options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
+});
 
 // Configurar CORS con optimizaciones
 // Intentar leer como array primero, luego como string JSON
@@ -1251,131 +1180,43 @@ using (var scope = app.Services.CreateScope())
     {
         Log.Information("🔍 Verificando existencia de tabla SubProducts...");
         Log.Information("📊 Tipo de proveedor de base de datos: {ProviderName}", dbContext.Database.ProviderName);
-        Log.Information("📊 IsSqlServer: {IsSqlServer}, IsSqlite: {IsSqlite}", 
-            dbContext.Database.IsSqlServer(), dbContext.Database.IsSqlite());
+        Log.Information("📊 Usando SQL Server 8.0");
         
-        // Verificar si es PostgreSQL por el nombre del proveedor
-        var isPostgreSQL = dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true;
-        Log.Information("📊 Detección PostgreSQL por ProviderName: {IsPostgreSQL}", isPostgreSQL);
-        
-        if (dbContext.Database.IsSqlServer())
-        {
-            Log.Information("📊 Usando SQL Server, creando tabla SubProducts...");
-            // Crear la tabla si no existe
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SubProducts]') AND type in (N'U'))
-                BEGIN
-                    CREATE TABLE [dbo].[SubProducts] (
-                        [Id] int NOT NULL IDENTITY(1,1),
-                        [Name] nvarchar(200) NOT NULL,
-                        [Description] nvarchar(500) NULL,
-                        [Price] decimal(18,2) NOT NULL,
-                        [IsAvailable] bit NOT NULL DEFAULT 1,
-                        [DisplayOrder] int NOT NULL DEFAULT 0,
-                        [CreatedAt] datetime2 NOT NULL,
-                        [UpdatedAt] datetime2 NULL,
-                        [ProductId] int NOT NULL,
-                        CONSTRAINT [PK_SubProducts] PRIMARY KEY ([Id]),
-                        CONSTRAINT [FK_SubProducts_Products_ProductId] FOREIGN KEY ([ProductId]) 
-                            REFERENCES [dbo].[Products] ([Id]) ON DELETE CASCADE
-                    );
-                    CREATE INDEX [IX_SubProducts_ProductId] ON [dbo].[SubProducts] ([ProductId]);
-                    CREATE INDEX [IX_SubProducts_IsAvailable] ON [dbo].[SubProducts] ([IsAvailable]);
-                    CREATE INDEX [IX_SubProducts_DisplayOrder] ON [dbo].[SubProducts] ([DisplayOrder]);
-                    CREATE INDEX [IX_SubProducts_ProductId_IsAvailable_DisplayOrder] ON [dbo].[SubProducts] ([ProductId], [IsAvailable], [DisplayOrder]);
-                END
-            ");
-            Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en SQL Server");
-        }
-        else if (isPostgreSQL)
-        {
-            Log.Information("📊 Usando PostgreSQL, creando tabla SubProducts...");
-            // Para PostgreSQL
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                CREATE TABLE IF NOT EXISTS ""SubProducts"" (
-                    ""Id"" SERIAL PRIMARY KEY,
-                    ""Name"" VARCHAR(200) NOT NULL,
-                    ""Description"" VARCHAR(500) NULL,
-                    ""Price"" DECIMAL(18,2) NOT NULL,
-                    ""IsAvailable"" BOOLEAN NOT NULL DEFAULT TRUE,
-                    ""DisplayOrder"" INTEGER NOT NULL DEFAULT 0,
-                    ""CreatedAt"" TIMESTAMP NOT NULL,
-                    ""UpdatedAt"" TIMESTAMP NULL,
-                    ""ProductId"" INTEGER NOT NULL,
-                    CONSTRAINT ""FK_SubProducts_Products_ProductId"" FOREIGN KEY (""ProductId"") 
-                        REFERENCES ""Products"" (""Id"") ON DELETE CASCADE
+        // Crear la tabla SubProducts si no existe (SQL Server)
+        Log.Information("📊 Creando tabla SubProducts en SQL Server...");
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SubProducts]') AND type in (N'U'))
+            BEGIN
+                CREATE TABLE [dbo].[SubProducts] (
+                    [Id] int NOT NULL IDENTITY(1,1),
+                    [Name] nvarchar(200) NOT NULL,
+                    [Description] nvarchar(500) NULL,
+                    [Price] decimal(18,2) NOT NULL,
+                    [IsAvailable] bit NOT NULL DEFAULT 1,
+                    [DisplayOrder] int NOT NULL DEFAULT 0,
+                    [CreatedAt] datetime2 NOT NULL,
+                    [UpdatedAt] datetime2 NULL,
+                    [ProductId] int NOT NULL,
+                    CONSTRAINT [PK_SubProducts] PRIMARY KEY ([Id]),
+                    CONSTRAINT [FK_SubProducts_Products_ProductId] FOREIGN KEY ([ProductId]) 
+                        REFERENCES [dbo].[Products] ([Id]) ON DELETE CASCADE
                 );
-                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_ProductId"" ON ""SubProducts"" (""ProductId"");
-                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_IsAvailable"" ON ""SubProducts"" (""IsAvailable"");
-                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_DisplayOrder"" ON ""SubProducts"" (""DisplayOrder"");
-                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_ProductId_IsAvailable_DisplayOrder"" ON ""SubProducts"" (""ProductId"", ""IsAvailable"", ""DisplayOrder"");
-            ");
-            Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en PostgreSQL");
-        }
-        else if (dbContext.Database.IsSqlite())
-        {
-            Log.Information("📊 Usando SQLite, creando tabla SubProducts...");
-            // Para SQLite
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                CREATE TABLE IF NOT EXISTS [SubProducts] (
-                    [Id] INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    [Name] TEXT NOT NULL,
-                    [Description] TEXT NULL,
-                    [Price] REAL NOT NULL,
-                    [IsAvailable] INTEGER NOT NULL DEFAULT 1,
-                    [DisplayOrder] INTEGER NOT NULL DEFAULT 0,
-                    [CreatedAt] TEXT NOT NULL,
-                    [UpdatedAt] TEXT NULL,
-                    [ProductId] INTEGER NOT NULL,
-                    FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS [IX_SubProducts_ProductId] ON [SubProducts] ([ProductId]);
-                CREATE INDEX IF NOT EXISTS [IX_SubProducts_IsAvailable] ON [SubProducts] ([IsAvailable]);
-                CREATE INDEX IF NOT EXISTS [IX_SubProducts_DisplayOrder] ON [SubProducts] ([DisplayOrder]);
-            ");
-            Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en SQLite");
-        }
-        else
-        {
-            Log.Warning("⚠️ Tipo de base de datos no reconocido (ProviderName: {ProviderName}), no se puede crear tabla SubProducts automáticamente", 
-                dbContext.Database.ProviderName);
-        }
+                CREATE INDEX [IX_SubProducts_ProductId] ON [dbo].[SubProducts] ([ProductId]);
+                CREATE INDEX [IX_SubProducts_IsAvailable] ON [dbo].[SubProducts] ([IsAvailable]);
+                CREATE INDEX [IX_SubProducts_DisplayOrder] ON [dbo].[SubProducts] ([DisplayOrder]);
+                CREATE INDEX [IX_SubProducts_ProductId_IsAvailable_DisplayOrder] ON [dbo].[SubProducts] ([ProductId], [IsAvailable], [DisplayOrder]);
+            END
+        ");
+        Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en SQL Server");
         
-        // Agregar columna SubProductsJson a OrderItems si no existe
-        var isPostgreSQLForColumn = dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true;
-        
-        if (dbContext.Database.IsSqlServer())
-        {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[OrderItems]') AND name = 'SubProductsJson')
-                BEGIN
-                    ALTER TABLE [dbo].[OrderItems] ADD [SubProductsJson] nvarchar(2000) NULL;
-                END
-            ");
-            Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems (SQL Server)");
-        }
-        else if (isPostgreSQLForColumn)
-        {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name = 'OrderItems' AND column_name = 'SubProductsJson'
-                    ) THEN
-                        ALTER TABLE ""OrderItems"" ADD COLUMN ""SubProductsJson"" VARCHAR(2000) NULL;
-                    END IF;
-                END $$;
-            ");
-            Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems (PostgreSQL)");
-        }
-        else if (dbContext.Database.IsSqlite())
-        {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
-                -- SQLite no soporta ALTER TABLE ADD COLUMN IF NOT EXISTS directamente
-                -- Se manejará automáticamente con migraciones de EF Core
-            ");
-        }
+        // Agregar columna SubProductsJson a OrderItems si no existe (SQL Server)
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[OrderItems]') AND name = 'SubProductsJson')
+            BEGIN
+                ALTER TABLE [dbo].[OrderItems] ADD [SubProductsJson] nvarchar(2000) NULL;
+            END
+        ");
+        Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems (SQL Server)");
     }
     catch (Exception ex)
     {
