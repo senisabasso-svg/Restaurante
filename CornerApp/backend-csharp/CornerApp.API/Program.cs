@@ -244,8 +244,11 @@ string? connectionString = null;
 if (builder.Environment.IsProduction())
 {
     // PRODUCCIÓN: Connection string hardcodeado directamente - PostgreSQL de Render
-    connectionString = "Host=dpg-d62kjuogjchc73bq48qg-a;Port=5432;Database=cornerappdb;Username=cornerappdb_user;Password=4WooAkinpyD01iTZFk7FAqFJJoNG07zS;SSL Mode=Require;Trust Server Certificate=true";
+    // IMPORTANTE: Sin espacios, sin saltos de línea, formato exacto para Npgsql
+    connectionString = "Host=dpg-d62kjuogjchc73bq48qg-a;Port=5432;Database=cornerappdb;Username=cornerappdb_user;Password=4WooAkinpyD01iTZFk7FAqFJJoNG07zS;SSLMode=Require;TrustServerCertificate=true";
     Log.Information("PRODUCCIÓN: Usando connection string hardcodeado de PostgreSQL (Render)");
+    Log.Information("Connection string hardcodeado (primeros 100 caracteres): {ConnectionString}", 
+        connectionString.Length > 100 ? connectionString.Substring(0, 100) + "..." : connectionString);
 }
 else
 {
@@ -287,6 +290,19 @@ else if (isPostgreSQL)
     // PostgreSQL (Render, producción)
     Log.Information("Configurando Entity Framework para PostgreSQL");
     Log.Information("Connection string para Npgsql (longitud: {Length})", connectionString.Length);
+    
+    // Validar el connection string con NpgsqlConnectionStringBuilder antes de usarlo
+    try
+    {
+        var builderTest = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+        Log.Information("Connection string validado correctamente. Host: {Host}, Port: {Port}, Database: {Database}, Username: {Username}", 
+            builderTest.Host, builderTest.Port, builderTest.Database, builderTest.Username);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "ERROR: El connection string NO es válido para Npgsql. Connection string: {ConnectionString}", connectionString);
+        throw new InvalidOperationException($"El connection string no es válido para Npgsql: {ex.Message}", ex);
+    }
     
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
