@@ -304,9 +304,32 @@ else if (isPostgreSQL)
         throw new InvalidOperationException($"El connection string no es válido para Npgsql: {ex.Message}", ex);
     }
     
+    // Guardar el connection string validado en una variable local para asegurar que se use
+    var validatedConnectionString = connectionString;
+    
+    // Validación final: asegurar que el connection string no esté vacío o tenga caracteres inválidos
+    if (string.IsNullOrWhiteSpace(validatedConnectionString))
+    {
+        Log.Error("ERROR CRÍTICO: Connection string está vacío o es null");
+        throw new InvalidOperationException("Connection string está vacío o es null");
+    }
+    
+    // Verificar que no tenga caracteres de control o espacios al inicio/final
+    validatedConnectionString = validatedConnectionString.Trim();
+    if (validatedConnectionString.Length == 0)
+    {
+        Log.Error("ERROR CRÍTICO: Connection string está vacío después de trim");
+        throw new InvalidOperationException("Connection string está vacío después de trim");
+    }
+    
+    Log.Information("Connection string final validado (longitud: {Length}, primer carácter: '{FirstChar}', último carácter: '{LastChar}')", 
+        validatedConnectionString.Length, 
+        validatedConnectionString[0], 
+        validatedConnectionString[validatedConnectionString.Length - 1]);
+    
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
+        options.UseNpgsql(validatedConnectionString, npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 3,
