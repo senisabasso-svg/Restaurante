@@ -239,18 +239,56 @@ Log.Information("Environment: {Environment}", builder.Environment.EnvironmentNam
 Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
 
 // En producción, usar PostgreSQL de Render directamente, NO leer de appsettings.json
-var connectionString = builder.Environment.IsProduction()
-    ? (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
-        ?? builder.Configuration["CONNECTION_STRING"]
-        ?? "postgresql://cornerappdb_user:4WooAkinpyD01iTZFk7FAqFJJoNG07zS@dpg-d62kjuogjchc73bq48qg-a.virginia-postgres.render.com/cornerappdb")
-    : (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
-        ?? builder.Configuration["CONNECTION_STRING"] 
+// Usar Environment.GetEnvironmentVariable para asegurar que solo lea de variables de entorno
+string? connectionString = null;
+if (builder.Environment.IsProduction())
+{
+    // 1. Intentar desde SecretsService
+    var secretConnectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result;
+    Log.Information("SecretsService connection string: {HasValue}", secretConnectionString != null);
+    
+    // 2. Intentar desde variable de entorno (NO de appsettings.json)
+    var envConnectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
+    Log.Information("Variable de entorno CONNECTION_STRING: {HasValue} (longitud: {Length})", 
+        envConnectionString != null, envConnectionString?.Length ?? 0);
+    
+    // 3. Usar fallback hardcodeado
+    connectionString = secretConnectionString 
+        ?? envConnectionString 
+        ?? "postgresql://cornerappdb_user:4WooAkinpyD01iTZFk7FAqFJJoNG07zS@dpg-d62kjuogjchc73bq48qg-a.virginia-postgres.render.com/cornerappdb";
+    
+    Log.Information("Connection String final seleccionado: {Source}", 
+        secretConnectionString != null ? "SecretsService" 
+        : envConnectionString != null ? "Environment Variable" 
+        : "Hardcoded Fallback");
+}
+else
+{
+    // Desarrollo: permitir appsettings.json
+    connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
+        ?? Environment.GetEnvironmentVariable("CONNECTION_STRING")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json"));
+        ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
+}
 
 Log.Information("Connection String configurado (longitud: {Length})", connectionString?.Length ?? 0);
-Log.Information("Connection String (primeros 80 caracteres): {ConnectionString}", 
-    connectionString.Length > 80 ? connectionString.Substring(0, 80) + "..." : connectionString);
+var connectionStringForLog = connectionString.Length > 80 
+    ? connectionString.Substring(0, 80) + "..." 
+    : connectionString;
+// Ocultar contraseña si está presente
+if (connectionStringForLog.Contains("password=", StringComparison.OrdinalIgnoreCase) || connectionStringForLog.Contains("@"))
+{
+    var passwordIndex = connectionStringForLog.IndexOf(":", connectionStringForLog.IndexOf("://") + 3);
+    if (passwordIndex >= 0)
+    {
+        var atIndex = connectionStringForLog.IndexOf("@", passwordIndex);
+        if (atIndex >= 0)
+        {
+            connectionStringForLog = connectionStringForLog.Substring(0, passwordIndex + 1) + "***" + connectionStringForLog.Substring(atIndex);
+        }
+    }
+}
+Log.Information("Connection String (primeros 80 caracteres): {ConnectionString}", connectionStringForLog);
 
 // Detectar tipo de base de datos
 var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
