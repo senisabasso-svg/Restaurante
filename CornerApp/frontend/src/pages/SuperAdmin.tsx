@@ -4,6 +4,8 @@ import { useToast } from '../components/Toast/ToastContext';
 import { Navigate } from 'react-router-dom';
 import { Plus, Trash2, Edit, Building2, Search, X } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 interface Restaurant {
   id: number;
   name: string;
@@ -51,7 +53,7 @@ export default function SuperAdminPage() {
   const fetchRestaurants = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/restaurants', {
+      const response = await fetch(`${API_BASE_URL}/api/restaurants`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -83,7 +85,7 @@ export default function SuperAdminPage() {
         return;
       }
 
-      const response = await fetch('/api/restaurants', {
+      const response = await fetch(`${API_BASE_URL}/api/restaurants`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

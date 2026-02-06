@@ -16,6 +16,8 @@ import { Globe } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '../../components/Toast/ToastContext';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export default function SettingsInfoPage() {
   const { theme, toggleTheme } = useTheme();
   const { language, changeLanguage, t } = useLanguage();
@@ -37,7 +39,7 @@ export default function SettingsInfoPage() {
   const loadPOSConfig = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/restaurants/current/pos-config', {
+      const response = await fetch(`${API_BASE_URL}/api/restaurants/current/pos-config`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
         }
@@ -62,7 +64,7 @@ export default function SettingsInfoPage() {
   const handleSavePOSConfig = async () => {
     try {
       setSaving(true);
-      const response = await fetch('/api/restaurants/current/pos-config', {
+      const response = await fetch(`${API_BASE_URL}/api/restaurants/current/pos-config`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -525,7 +525,7 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('/admin/api/products/upload-image', {
+    const response = await fetch(`${this.baseUrl}/admin/api/products/upload-image`, {
       method: 'POST',
       body: formData,
     });

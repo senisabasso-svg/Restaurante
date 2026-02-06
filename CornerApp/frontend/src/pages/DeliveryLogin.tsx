@@ -5,6 +5,8 @@ import { LogIn, Lock, User, Truck } from 'lucide-react';
 import Logo from '../components/Logo/Logo';
 import { api } from '../api/client';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export default function DeliveryLoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +25,7 @@ export default function DeliveryLoginPage() {
     try {
       setLoading(true);
       
-      const response = await fetch('/api/deliveryperson/login', {
+      const response = await fetch(`${API_BASE_URL}/api/deliveryperson/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

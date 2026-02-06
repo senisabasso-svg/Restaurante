@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 interface User {
   id: number;
   restaurantId: number | null;
@@ -50,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (restaurantId: number | null, username: string, password: string) => {
     try {
-      const response = await fetch('/api/auth/admin/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

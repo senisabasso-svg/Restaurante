@@ -4,6 +4,8 @@ import { useToast } from '../components/Toast/ToastContext';
 import { LogIn, Lock, User, Utensils, Store } from 'lucide-react';
 import Logo from '../components/Logo/Logo';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export default function WaiterLoginPage() {
   const [restaurantId, setRestaurantId] = useState('');
   const [username, setUsername] = useState('');
@@ -34,7 +36,7 @@ export default function WaiterLoginPage() {
     try {
       setLoading(true);
       
-      const response = await fetch('/api/auth/admin/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
