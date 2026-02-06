@@ -244,9 +244,24 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> AdminLogin([FromBody] AdminLoginRequest request)
     {
+        // Logging detallado para diagnosticar
+        _logger.LogInformation("🔐 Intento de login admin - Username: {Username}, RestaurantId: {RestaurantId}, Request recibido: {Request}", 
+            request?.Username ?? "NULL", 
+            request?.RestaurantId?.ToString() ?? "NULL",
+            System.Text.Json.JsonSerializer.Serialize(request));
+        
         // Validar entrada básica
+        if (request == null)
+        {
+            _logger.LogWarning("❌ Request es NULL");
+            return BadRequest(new { error = "Request inválido" });
+        }
+        
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
         {
+            _logger.LogWarning("❌ Username o Password vacíos - Username: {Username}, Password: {HasPassword}", 
+                request.Username ?? "NULL", 
+                !string.IsNullOrWhiteSpace(request.Password));
             return BadRequest(new { error = "Usuario y contraseña son requeridos" });
         }
 
