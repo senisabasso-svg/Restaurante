@@ -233,126 +233,17 @@ builder.Services.AddSingleton<ISecretsService, SecretsService>();
 // Nota: Usamos Task.Run para evitar deadlocks en la inicialización
 var tempServiceProvider = builder.Services.BuildServiceProvider();
 var secretsService = tempServiceProvider.GetRequiredService<ISecretsService>();
-// TEMPORAL: Connection string hardcodeado para Render (solo producción)
-// En producción, priorizar CONNECTION_STRING o usar el hardcodeado, NO usar appsettings.json
-Log.Information("=== INICIO CONFIGURACIÓN CONNECTION STRING ===");
-Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
-Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
+// Configurar connection string para SQL Server
+var connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
+    ?? builder.Configuration["CONNECTION_STRING"] 
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
 
-var connectionString = builder.Environment.IsProduction()
-    ? (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
-        ?? builder.Configuration["CONNECTION_STRING"]
-        ?? "postgresql://cornerappdb_user:4WooAkinpyDOliTZFk7FAqFJJoNGO7zS@dpg-d62kjuogjchc73bq48qg-a/cornerappdb")
-    : (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
-        ?? builder.Configuration["CONNECTION_STRING"] 
-        ?? builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json"));
+Log.Information("Connection String configurado (longitud: {Length})", connectionString?.Length ?? 0);
 
-Log.Information("Connection String obtenido (longitud: {Length})", connectionString?.Length ?? 0);
-
-// Log del tipo de connection string (sin mostrar la contraseña)
-var connectionStringForLog = connectionString.Length > 50 
-    ? connectionString.Substring(0, 50) + "..." 
-    : connectionString;
-// Ocultar contraseña si está presente
-if (connectionStringForLog.Contains("password=", StringComparison.OrdinalIgnoreCase))
-{
-    var passwordIndex = connectionStringForLog.IndexOf("password=", StringComparison.OrdinalIgnoreCase);
-    if (passwordIndex >= 0)
-    {
-        var beforePassword = connectionStringForLog.Substring(0, passwordIndex + 9);
-        var afterPassword = connectionStringForLog.Substring(passwordIndex + 9);
-        var atIndex = afterPassword.IndexOf("@");
-        if (atIndex >= 0)
-        {
-            connectionStringForLog = beforePassword + "***" + afterPassword.Substring(atIndex);
-        }
-        else
-        {
-            connectionStringForLog = beforePassword + "***";
-        }
-    }
-}
-Log.Information("Connection String detectado: {ConnectionString}", connectionStringForLog);
-
-// Detectar tipo de base de datos basándose en el connection string
-// PostgreSQL: postgresql://, Host=, o Server= con User Id= (sin Trusted_Connection)
-var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
-    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)
-    || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
-    || (connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) 
-        && connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase) 
-        && connectionString.Contains("User Id=", StringComparison.OrdinalIgnoreCase) 
-        && !connectionString.Contains("Trusted_Connection", StringComparison.OrdinalIgnoreCase));
-
-var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
-    && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
-
-Log.Information("Detección de base de datos - PostgreSQL: {IsPostgreSQL}, SQLite: {IsSQLite}, Connection String length: {Length}", 
-    isPostgreSQL, isSQLite, connectionString.Length);
-
-var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
-    && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
-
-if (isSQLite)
-{
-    // SQLite (desarrollo sin servidor)
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseSqlite(connectionString);
-        
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableSensitiveDataLogging();
-            options.EnableDetailedErrors();
-        }
-    });
-}
-else if (isPostgreSQL)
-{
-    // PostgreSQL (Render, producción con PostgreSQL)
-    Log.Information("Configurando Entity Framework para PostgreSQL");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
-        {
-            // Habilitar retry logic para resiliencia
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
-            
-            // Configuración de comandos
-            npgsqlOptions.CommandTimeout(30); // 30 segundos timeout por defecto
-        });
-        
-        // Habilitar sensitive data logging solo en desarrollo
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableSensitiveDataLogging();
-            options.EnableDetailedErrors();
-        }
-        
-        // Configuración de query tracking
-        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
-    });
-}
-else
-{
-    // SQL Server (solo desarrollo local)
-    // En producción, requerir explícitamente PostgreSQL
-    if (!builder.Environment.IsDevelopment())
-    {
-        Log.Error("ERROR: No se detectó PostgreSQL en producción. Connection String: {ConnectionString}", connectionStringForLog);
-        throw new InvalidOperationException(
-            "En producción se requiere PostgreSQL. " +
-            "Configure la variable de entorno CONNECTION_STRING con el connection string de PostgreSQL. " +
-            "Formato esperado: postgresql://usuario:password@host:puerto/database");
-    }
-    
-    // Solo permitir SQL Server en desarrollo
-    Log.Warning("Configurando Entity Framework para SQL Server (solo desarrollo).");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+// Configurar Entity Framework para SQL Server únicamente
+Log.Information("Configurando Entity Framework para SQL Server");
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(connectionString, sqlOptions =>
         {
@@ -381,7 +272,6 @@ else
         // Nota: Lazy loading está deshabilitado por defecto (mejor performance, más explícito)
         // Usar Include() explícitamente cuando se necesiten datos relacionados
     });
-}
 
 // Configurar CORS con optimizaciones
 // Intentar leer como array primero, luego como string JSON
