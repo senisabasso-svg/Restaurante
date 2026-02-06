@@ -239,19 +239,45 @@ var connectionString = Task.Run(async () => await secretsService.GetSecretAsync(
     ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
 
 // Log del tipo de connection string (sin mostrar la contraseña)
-var connectionStringForLog = connectionString.Contains("password=") 
-    ? connectionString.Substring(0, Math.Min(50, connectionString.Length)) + "***" 
-    : connectionString.Substring(0, Math.Min(50, connectionString.Length));
-Log.Information("Connection String detectado (primeros 50 caracteres): {ConnectionString}", connectionStringForLog);
+var connectionStringForLog = connectionString.Length > 50 
+    ? connectionString.Substring(0, 50) + "..." 
+    : connectionString;
+// Ocultar contraseña si está presente
+if (connectionStringForLog.Contains("password=", StringComparison.OrdinalIgnoreCase))
+{
+    var passwordIndex = connectionStringForLog.IndexOf("password=", StringComparison.OrdinalIgnoreCase);
+    if (passwordIndex >= 0)
+    {
+        var beforePassword = connectionStringForLog.Substring(0, passwordIndex + 9);
+        var afterPassword = connectionStringForLog.Substring(passwordIndex + 9);
+        var atIndex = afterPassword.IndexOf("@");
+        if (atIndex >= 0)
+        {
+            connectionStringForLog = beforePassword + "***" + afterPassword.Substring(atIndex);
+        }
+        else
+        {
+            connectionStringForLog = beforePassword + "***";
+        }
+    }
+}
+Log.Information("Connection String detectado: {ConnectionString}", connectionStringForLog);
 
 // Detectar tipo de base de datos basándose en el connection string
 // PostgreSQL: postgresql://, Host=, o Server= con User Id= (sin Trusted_Connection)
 var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)
     || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
     || (connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) 
         && connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase) 
         && connectionString.Contains("User Id=", StringComparison.OrdinalIgnoreCase) 
         && !connectionString.Contains("Trusted_Connection", StringComparison.OrdinalIgnoreCase));
+
+var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
+    && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
+
+Log.Information("Detección de base de datos - PostgreSQL: {IsPostgreSQL}, SQLite: {IsSQLite}, Connection String length: {Length}", 
+    isPostgreSQL, isSQLite, connectionString.Length);
 
 var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
     && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
