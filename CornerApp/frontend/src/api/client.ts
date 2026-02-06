@@ -9,6 +9,19 @@ import {
   MOCK_SUBPRODUCTS, 
   MOCK_SPACES, 
   MOCK_TABLES,
+  MOCK_DELIVERY_PERSON,
+  MOCK_CUSTOMER,
+  MOCK_ORDER_IN_KITCHEN,
+  MOCK_CASH_REGISTER_STATUS,
+  MOCK_CASH_REGISTER,
+  MOCK_REPORT_STATS,
+  MOCK_REVENUE_DATA,
+  MOCK_TOP_PRODUCTS,
+  MOCK_REVENUE_BY_PAYMENT,
+  MOCK_COMPARISON_DATA,
+  MOCK_PEAK_HOURS_DATA,
+  MOCK_DELIVERY_PERFORMANCE,
+  MOCK_CASH_REGISTERS_REPORT,
   mockDelay 
 } from '../data/mockData';
 
@@ -163,25 +176,90 @@ class ApiClient {
     // Dashboard stats
     if (endpoint.includes('/admin/api/reports/dashboard-stats')) {
       return {
-        pendingOrders: 0,
-        preparingOrders: 0,
+        pendingOrders: 1,
+        preparingOrders: 1,
         deliveringOrders: 0,
-        todayRevenue: 0,
-        todayOrders: 0,
-        totalActiveOrders: 0,
+        todayRevenue: 125000,
+        todayOrders: 25,
+        totalActiveOrders: 2,
         pendingReceiptsCount: 0
       } as T;
     }
     
-    // Orders
+    // Orders activos (para cocina)
+    if (endpoint.includes('/admin/api/orders/active') && method === 'GET') {
+      return [MOCK_ORDER_IN_KITCHEN] as T;
+    }
+    
+    // Orders (general)
     if (endpoint.includes('/admin/api/orders') && method === 'GET') {
       return {
-        data: [],
-        totalCount: 0,
+        data: [MOCK_ORDER_IN_KITCHEN],
+        totalCount: 1,
         page: 1,
         pageSize: 10,
-        totalPages: 0
+        totalPages: 1
       } as T;
+    }
+    
+    // Repartidores
+    if ((endpoint.includes('/admin/api/delivery-persons') || endpoint.includes('/api/delivery-persons')) && method === 'GET') {
+      return [MOCK_DELIVERY_PERSON] as T;
+    }
+    
+    // Clientes
+    if (endpoint.includes('/api/customers') && method === 'GET') {
+      return [MOCK_CUSTOMER] as T;
+    }
+    
+    // Estado de caja
+    if (endpoint.includes('/api/cash-register/status') && method === 'GET') {
+      return MOCK_CASH_REGISTER_STATUS as T;
+    }
+    
+    // Caja
+    if (endpoint.includes('/api/cash-register') && method === 'GET' && !endpoint.includes('status')) {
+      return MOCK_CASH_REGISTER as T;
+    }
+    
+    // Reportes - Estadísticas
+    if (endpoint.includes('/admin/api/reports/stats') && method === 'GET') {
+      return MOCK_REPORT_STATS as T;
+    }
+    
+    // Reportes - Ingresos
+    if (endpoint.includes('/admin/api/reports/revenue') && method === 'GET') {
+      return MOCK_REVENUE_DATA as T;
+    }
+    
+    // Reportes - Productos más vendidos
+    if (endpoint.includes('/admin/api/reports/top-products') && method === 'GET') {
+      return MOCK_TOP_PRODUCTS as T;
+    }
+    
+    // Reportes - Ingresos por método de pago
+    if (endpoint.includes('/admin/api/reports/revenue-by-payment') && method === 'GET') {
+      return MOCK_REVENUE_BY_PAYMENT as T;
+    }
+    
+    // Reportes - Comparación
+    if (endpoint.includes('/admin/api/reports/comparison') && method === 'GET') {
+      return MOCK_COMPARISON_DATA as T;
+    }
+    
+    // Reportes - Horas pico
+    if (endpoint.includes('/admin/api/reports/peak-hours') && method === 'GET') {
+      return MOCK_PEAK_HOURS_DATA as T;
+    }
+    
+    // Reportes - Rendimiento de repartidores
+    if (endpoint.includes('/admin/api/reports/delivery-performance') && method === 'GET') {
+      return MOCK_DELIVERY_PERFORMANCE as T;
+    }
+    
+    // Reportes - Cajas
+    if (endpoint.includes('/admin/api/reports/cash-registers') && method === 'GET') {
+      return MOCK_CASH_REGISTERS_REPORT as T;
     }
     
     // Por defecto para POST/PUT/DELETE, devolver éxito
