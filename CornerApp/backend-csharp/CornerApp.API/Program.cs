@@ -293,6 +293,30 @@ var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.O
 
 Log.Information("Detección - isPostgreSQL: {IsPostgreSQL}", isPostgreSQL);
 
+// Si es PostgreSQL y está en formato URI, convertir a formato tradicional de Npgsql
+if (isPostgreSQL && (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)))
+{
+    Log.Information("Convirtiendo connection string de formato URI a formato tradicional de Npgsql...");
+    try
+    {
+        var uri = new Uri(connectionString);
+        var host = uri.Host;
+        var port = uri.Port > 0 ? uri.Port : 5432;
+        var database = uri.AbsolutePath.TrimStart('/');
+        var username = uri.UserInfo.Split(':')[0];
+        var password = uri.UserInfo.Split(':').Length > 1 ? uri.UserInfo.Split(':')[1] : "";
+        
+        connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+        Log.Information("Connection string convertido exitosamente (longitud: {Length})", connectionString.Length);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Error al convertir connection string de formato URI: {Message}", ex.Message);
+        throw new InvalidOperationException($"Error al convertir connection string de formato URI: {ex.Message}", ex);
+    }
+}
+
 var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
     && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
 
