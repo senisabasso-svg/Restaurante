@@ -238,8 +238,25 @@ var connectionString = Task.Run(async () => await secretsService.GetSecretAsync(
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
 
+// Log del tipo de connection string (sin mostrar la contraseña)
+var connectionStringForLog = connectionString.Contains("password=") 
+    ? connectionString.Substring(0, Math.Min(50, connectionString.Length)) + "***" 
+    : connectionString.Substring(0, Math.Min(50, connectionString.Length));
+Log.Information("Connection String detectado (primeros 50 caracteres): {ConnectionString}", connectionStringForLog);
+
 // Detectar tipo de base de datos basándose en el connection string
-if (connectionString.Contains("Data Source=") && !connectionString.Contains("Server="))
+// PostgreSQL: postgresql://, Host=, o Server= con User Id= (sin Trusted_Connection)
+var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+    || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+    || (connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase) 
+        && connectionString.Contains("Database=", StringComparison.OrdinalIgnoreCase) 
+        && connectionString.Contains("User Id=", StringComparison.OrdinalIgnoreCase) 
+        && !connectionString.Contains("Trusted_Connection", StringComparison.OrdinalIgnoreCase));
+
+var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
+    && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
+
+if (isSQLite)
 {
     // SQLite (desarrollo sin servidor)
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -253,9 +270,10 @@ if (connectionString.Contains("Data Source=") && !connectionString.Contains("Ser
         }
     });
 }
-else if (connectionString.Contains("postgresql://") || connectionString.Contains("Host=") || (connectionString.Contains("Server=") && connectionString.Contains("Database=") && connectionString.Contains("User Id=") && !connectionString.Contains("Trusted_Connection")))
+else if (isPostgreSQL)
 {
     // PostgreSQL (Render, producción con PostgreSQL)
+    Log.Information("Configurando Entity Framework para PostgreSQL");
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseNpgsql(connectionString, npgsqlOptions =>
@@ -285,6 +303,7 @@ else
 {
     // SQL Server (producción y desarrollo con SSMS)
     // Configuración optimizada para producción con connection pooling
+    Log.Warning("Configurando Entity Framework para SQL Server. Si esperabas PostgreSQL, verifica el connection string.");
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(connectionString, sqlOptions =>
