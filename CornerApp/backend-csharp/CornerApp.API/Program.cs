@@ -233,13 +233,13 @@ builder.Services.AddSingleton<ISecretsService, SecretsService>();
 // Nota: Usamos Task.Run para evitar deadlocks en la inicialización
 var tempServiceProvider = builder.Services.BuildServiceProvider();
 var secretsService = tempServiceProvider.GetRequiredService<ISecretsService>();
-// Configurar connection string - En producción usar PostgreSQL de Render
+// Configurar connection string - En producción usar SQL Server
 Log.Information("=== INICIO CONFIGURACIÓN BASE DE DATOS ===");
 Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
 Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
 
 // Configurar connection string - Prioridad: Variable de entorno > SecretsService > appsettings.json
-// En producción (Linux), usar PostgreSQL desde variable de entorno CONNECTION_STRING
+// En producción (Linux), usar SQL Server desde variable de entorno CONNECTION_STRING
 string? connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
     ?? Environment.GetEnvironmentVariable("CONNECTION_STRING")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
@@ -256,10 +256,15 @@ var isPostgreSQL = connectionString.Contains("Host=", StringComparison.OrdinalIg
     || connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
     || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase);
 
-Log.Information("Detección - isPostgreSQL: {IsPostgreSQL}", isPostgreSQL);
-
 var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
     && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
+
+var isSQLServer = connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase)
+    || connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase)
+    || (!isPostgreSQL && !isSQLite); // Por defecto, usar SQL Server si no se detecta otro tipo
+
+Log.Information("Detección - isPostgreSQL: {IsPostgreSQL}, isSQLite: {IsSQLite}, isSQLServer: {IsSQLServer}", 
+    isPostgreSQL, isSQLite, isSQLServer);
 
 if (isSQLite)
 {
@@ -277,7 +282,7 @@ if (isSQLite)
 }
 else if (isPostgreSQL)
 {
-    // PostgreSQL (Render, producción)
+    // PostgreSQL (opcional, si se especifica explícitamente)
     Log.Information("Configurando Entity Framework para PostgreSQL");
     Log.Information("Connection string para Npgsql (longitud: {Length})", connectionString.Length);
     
@@ -294,28 +299,7 @@ else if (isPostgreSQL)
         throw new InvalidOperationException($"El connection string no es válido para Npgsql: {ex.Message}", ex);
     }
     
-    // Guardar el connection string validado en una variable local para asegurar que se use
-    var validatedConnectionString = connectionString;
-    
-    // Validación final: asegurar que el connection string no esté vacío o tenga caracteres inválidos
-    if (string.IsNullOrWhiteSpace(validatedConnectionString))
-    {
-        Log.Error("ERROR CRÍTICO: Connection string está vacío o es null");
-        throw new InvalidOperationException("Connection string está vacío o es null");
-    }
-    
-    // Verificar que no tenga caracteres de control o espacios al inicio/final
-    validatedConnectionString = validatedConnectionString.Trim();
-    if (validatedConnectionString.Length == 0)
-    {
-        Log.Error("ERROR CRÍTICO: Connection string está vacío después de trim");
-        throw new InvalidOperationException("Connection string está vacío después de trim");
-    }
-    
-    Log.Information("Connection string final validado (longitud: {Length}, primer carácter: '{FirstChar}', último carácter: '{LastChar}')", 
-        validatedConnectionString.Length, 
-        validatedConnectionString[0], 
-        validatedConnectionString[validatedConnectionString.Length - 1]);
+    var validatedConnectionString = connectionString.Trim();
     
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
@@ -337,8 +321,23 @@ else if (isPostgreSQL)
 }
 else
 {
-    // SQL Server (desarrollo local con SQL Server)
-    Log.Information("Configurando Entity Framework para SQL Server");
+    // SQL Server (opción por defecto para producción en Linux)
+    Log.Information("Configurando Entity Framework para SQL Server (opción por defecto)");
+    
+    // Validar el connection string con SqlConnectionStringBuilder
+    try
+    {
+        var builderTest = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+        Log.Information("Connection string validado correctamente. Server: {Server}, Database: {Database}, User ID: {UserId}", 
+            builderTest.DataSource ?? builderTest.Server, 
+            builderTest.InitialCatalog ?? builderTest.Database, 
+            builderTest.UserID);
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Advertencia: No se pudo validar el connection string con SqlConnectionStringBuilder. Continuando de todas formas.");
+    }
+    
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(connectionString, sqlOptions =>
