@@ -1248,6 +1248,13 @@ using (var scope = app.Services.CreateScope())
     try
     {
         Log.Information("🔍 Verificando existencia de tabla SubProducts...");
+        Log.Information("📊 Tipo de proveedor de base de datos: {ProviderName}", dbContext.Database.ProviderName);
+        Log.Information("📊 IsSqlServer: {IsSqlServer}, IsSqlite: {IsSqlite}", 
+            dbContext.Database.IsSqlServer(), dbContext.Database.IsSqlite());
+        
+        // Verificar si es PostgreSQL por el nombre del proveedor
+        var isPostgreSQL = dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true;
+        Log.Information("📊 Detección PostgreSQL por ProviderName: {IsPostgreSQL}", isPostgreSQL);
         
         if (dbContext.Database.IsSqlServer())
         {
@@ -1278,6 +1285,31 @@ using (var scope = app.Services.CreateScope())
             ");
             Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en SQL Server");
         }
+        else if (isPostgreSQL)
+        {
+            Log.Information("📊 Usando PostgreSQL, creando tabla SubProducts...");
+            // Para PostgreSQL
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS ""SubProducts"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""Name"" VARCHAR(200) NOT NULL,
+                    ""Description"" VARCHAR(500) NULL,
+                    ""Price"" DECIMAL(18,2) NOT NULL,
+                    ""IsAvailable"" BOOLEAN NOT NULL DEFAULT TRUE,
+                    ""DisplayOrder"" INTEGER NOT NULL DEFAULT 0,
+                    ""CreatedAt"" TIMESTAMP NOT NULL,
+                    ""UpdatedAt"" TIMESTAMP NULL,
+                    ""ProductId"" INTEGER NOT NULL,
+                    CONSTRAINT ""FK_SubProducts_Products_ProductId"" FOREIGN KEY (""ProductId"") 
+                        REFERENCES ""Products"" (""Id"") ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_ProductId"" ON ""SubProducts"" (""ProductId"");
+                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_IsAvailable"" ON ""SubProducts"" (""IsAvailable"");
+                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_DisplayOrder"" ON ""SubProducts"" (""DisplayOrder"");
+                CREATE INDEX IF NOT EXISTS ""IX_SubProducts_ProductId_IsAvailable_DisplayOrder"" ON ""SubProducts"" (""ProductId"", ""IsAvailable"", ""DisplayOrder"");
+            ");
+            Log.Information("✅ Tabla SubProducts verificada/creada exitosamente en PostgreSQL");
+        }
         else if (dbContext.Database.IsSqlite())
         {
             Log.Information("📊 Usando SQLite, creando tabla SubProducts...");
@@ -1303,10 +1335,13 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            Log.Warning("⚠️ Tipo de base de datos no reconocido, no se puede crear tabla SubProducts automáticamente");
+            Log.Warning("⚠️ Tipo de base de datos no reconocido (ProviderName: {ProviderName}), no se puede crear tabla SubProducts automáticamente", 
+                dbContext.Database.ProviderName);
         }
         
         // Agregar columna SubProductsJson a OrderItems si no existe
+        var isPostgreSQLForColumn = dbContext.Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true;
+        
         if (dbContext.Database.IsSqlServer())
         {
             await dbContext.Database.ExecuteSqlRawAsync(@"
@@ -1315,7 +1350,22 @@ using (var scope = app.Services.CreateScope())
                     ALTER TABLE [dbo].[OrderItems] ADD [SubProductsJson] nvarchar(2000) NULL;
                 END
             ");
-            Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems");
+            Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems (SQL Server)");
+        }
+        else if (isPostgreSQLForColumn)
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'OrderItems' AND column_name = 'SubProductsJson'
+                    ) THEN
+                        ALTER TABLE ""OrderItems"" ADD COLUMN ""SubProductsJson"" VARCHAR(2000) NULL;
+                    END IF;
+                END $$;
+            ");
+            Log.Information("✅ Columna SubProductsJson verificada/creada en OrderItems (PostgreSQL)");
         }
         else if (dbContext.Database.IsSqlite())
         {
