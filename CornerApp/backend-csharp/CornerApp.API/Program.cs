@@ -233,10 +233,13 @@ builder.Services.AddSingleton<ISecretsService, SecretsService>();
 // Nota: Usamos Task.Run para evitar deadlocks en la inicialización
 var tempServiceProvider = builder.Services.BuildServiceProvider();
 var secretsService = tempServiceProvider.GetRequiredService<ISecretsService>();
+// TEMPORAL: Connection string hardcodeado para Render (solo producción)
 var connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
     ?? builder.Configuration["CONNECTION_STRING"] 
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
+    ?? (builder.Environment.IsProduction() 
+        ? "postgresql://cornerappdb_user:4WooAkinpyDOliTZFk7FAqFJJoNGO7zS@dpg-d62kjuogjchc73bq48qg-a/cornerappdb"
+        : throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json"));
 
 // Log del tipo de connection string (sin mostrar la contraseña)
 var connectionStringForLog = connectionString.Length > 50 
