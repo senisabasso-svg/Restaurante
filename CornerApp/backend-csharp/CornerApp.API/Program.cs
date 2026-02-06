@@ -1382,13 +1382,13 @@ if (app.Environment.IsProduction())
         {
             Log.Information("🔧 Inicializando datos hardcodeados para demostración...");
             
-            // 1. Crear restaurante con ID 1 si no existe
-            var restaurant = await dbContext.Restaurants.FindAsync(1);
+            // 1. Crear restaurante con ID 12 si no existe
+            var restaurant = await dbContext.Restaurants.FindAsync(12);
             if (restaurant == null)
             {
                 restaurant = new Restaurant
                 {
-                    Id = 1,
+                    Id = 12,
                     Name = "Corner Restaurant",
                     Identifier = "corner",
                     Address = "Dirección de demostración",
@@ -1399,17 +1399,17 @@ if (app.Environment.IsProduction())
                 };
                 dbContext.Restaurants.Add(restaurant);
                 await dbContext.SaveChangesAsync();
-                Log.Information("✅ Restaurante creado: ID 1, Name: Corner Restaurant");
+                Log.Information("✅ Restaurante creado: ID 12, Name: Corner Restaurant");
             }
             
             // 2. Crear usuario admin "corner" con password "password123" si no existe
-            var admin = await dbContext.Admins.FirstOrDefaultAsync(a => a.RestaurantId == 1 && a.Username == "corner");
+            var admin = await dbContext.Admins.FirstOrDefaultAsync(a => a.RestaurantId == 12 && a.Username == "corner");
             if (admin == null)
             {
                 var passwordHash = BCrypt.Net.BCrypt.HashPassword("password123");
                 admin = new Admin
                 {
-                    RestaurantId = 1,
+                    RestaurantId = 12,
                     Username = "corner",
                     Email = "corner@cornerapp.com",
                     Name = "Corner Admin",
@@ -1423,12 +1423,12 @@ if (app.Environment.IsProduction())
             }
             
             // 3. Crear categoría si no existe
-            var category = await dbContext.Categories.FirstOrDefaultAsync(c => c.RestaurantId == 1 && c.Name == "Bebidas");
+            var category = await dbContext.Categories.FirstOrDefaultAsync(c => c.RestaurantId == 12 && c.Name == "Bebidas");
             if (category == null)
             {
                 category = new Category
                 {
-                    RestaurantId = 1,
+                    RestaurantId = 12,
                     Name = "Bebidas",
                     Description = "Categoría de bebidas",
                     DisplayOrder = 1,
@@ -1441,12 +1441,12 @@ if (app.Environment.IsProduction())
             }
             
             // 4. Crear producto si no existe
-            var product = await dbContext.Products.FirstOrDefaultAsync(p => p.RestaurantId == 1 && p.Name == "Coca Cola");
+            var product = await dbContext.Products.FirstOrDefaultAsync(p => p.RestaurantId == 12 && p.Name == "Coca Cola");
             if (product == null)
             {
                 product = new Product
                 {
-                    RestaurantId = 1,
+                    RestaurantId = 12,
                     Name = "Coca Cola",
                     Description = "Bebida gaseosa",
                     Price = 500,
@@ -1480,12 +1480,12 @@ if (app.Environment.IsProduction())
             }
             
             // 6. Crear espacio si no existe
-            var space = await dbContext.Spaces.FirstOrDefaultAsync(s => s.RestaurantId == 1 && s.Name == "Sala Principal");
+            var space = await dbContext.Spaces.FirstOrDefaultAsync(s => s.RestaurantId == 12 && s.Name == "Sala Principal");
             if (space == null)
             {
                 space = new Space
                 {
-                    RestaurantId = 1,
+                    RestaurantId = 12,
                     Name = "Sala Principal",
                     Description = "Área principal del restaurante",
                     IsActive = true,
@@ -1497,12 +1497,12 @@ if (app.Environment.IsProduction())
             }
             
             // 7. Crear mesas si no existen
-            var table1 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 1 && t.Number == "1");
+            var table1 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 12 && t.Number == "1");
             if (table1 == null)
             {
                 table1 = new Table
                 {
-                    RestaurantId = 1,
+                    RestaurantId = 12,
                     Number = "1",
                     Capacity = 4,
                     Location = "Frente",
@@ -1516,12 +1516,12 @@ if (app.Environment.IsProduction())
                 Log.Information("✅ Mesa creada: Mesa 1");
             }
             
-            var table2 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 1 && t.Number == "2");
+            var table2 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 12 && t.Number == "2");
             if (table2 == null)
             {
                 table2 = new Table
                 {
-                    RestaurantId = 1,
+                    RestaurantId = 12,
                     Number = "2",
                     Capacity = 2,
                     Location = "Fondo",
