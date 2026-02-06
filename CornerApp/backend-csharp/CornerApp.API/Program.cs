@@ -233,45 +233,82 @@ builder.Services.AddSingleton<ISecretsService, SecretsService>();
 // Nota: Usamos Task.Run para evitar deadlocks en la inicialización
 var tempServiceProvider = builder.Services.BuildServiceProvider();
 var secretsService = tempServiceProvider.GetRequiredService<ISecretsService>();
-// Configurar connection string para SQL Server
+// Configurar connection string - En producción usar PostgreSQL de Render
 var connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
     ?? builder.Configuration["CONNECTION_STRING"] 
-    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? (builder.Environment.IsProduction() 
+        ? "postgresql://cornerappdb_user:4WooAkinpyDOliTZFk7FAqFJJoNGO7zS@dpg-d62kjuogjchc73bq48qg-a/cornerappdb"
+        : builder.Configuration.GetConnectionString("DefaultConnection"))
     ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
 
 Log.Information("Connection String configurado (longitud: {Length})", connectionString?.Length ?? 0);
 
-// Configurar Entity Framework para SQL Server únicamente
-Log.Information("Configurando Entity Framework para SQL Server");
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+// Detectar tipo de base de datos
+var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)
+    || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase);
+
+var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
+    && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
+
+if (isSQLite)
+{
+    // SQLite (desarrollo local)
+    Log.Information("Configurando Entity Framework para SQLite");
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
-        options.UseSqlServer(connectionString, sqlOptions =>
-        {
-            // Habilitar retry logic para resiliencia
-            sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorNumbersToAdd: null);
-            
-            // Configuración de comandos
-            sqlOptions.CommandTimeout(30); // 30 segundos timeout por defecto
-        });
-        
-        // Habilitar sensitive data logging solo en desarrollo
+        options.UseSqlite(connectionString);
         if (builder.Environment.IsDevelopment())
         {
             options.EnableSensitiveDataLogging();
             options.EnableDetailedErrors();
         }
-        
-        // Configuración de query tracking
-        // Nota: Se recomienda usar AsNoTracking() explícitamente en consultas de solo lectura
-        // para mejorar el rendimiento y reducir el uso de memoria y conexiones
-        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
-        
-        // Nota: Lazy loading está deshabilitado por defecto (mejor performance, más explícito)
-        // Usar Include() explícitamente cuando se necesiten datos relacionados
     });
+}
+else if (isPostgreSQL)
+{
+    // PostgreSQL (Render, producción)
+    Log.Information("Configurando Entity Framework para PostgreSQL");
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    {
+        options.UseNpgsql(connectionString, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+            npgsqlOptions.CommandTimeout(30);
+        });
+        if (builder.Environment.IsDevelopment())
+        {
+            options.EnableSensitiveDataLogging();
+            options.EnableDetailedErrors();
+        }
+        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
+    });
+}
+else
+{
+    // SQL Server (desarrollo local con SQL Server)
+    Log.Information("Configurando Entity Framework para SQL Server");
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    {
+        options.UseSqlServer(connectionString, sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorNumbersToAdd: null);
+            sqlOptions.CommandTimeout(30);
+        });
+        if (builder.Environment.IsDevelopment())
+        {
+            options.EnableSensitiveDataLogging();
+            options.EnableDetailedErrors();
+        }
+        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
+    });
+}
 
 // Configurar CORS con optimizaciones
 // Intentar leer como array primero, luego como string JSON
