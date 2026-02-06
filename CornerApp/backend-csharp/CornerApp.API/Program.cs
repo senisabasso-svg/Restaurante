@@ -298,21 +298,47 @@ if (isPostgreSQL && (connectionString.Contains("postgresql://", StringComparison
     || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)))
 {
     Log.Information("Convirtiendo connection string de formato URI a formato tradicional de Npgsql...");
+    Log.Information("Connection string original (primeros 80 caracteres): {ConnectionString}", 
+        connectionString.Length > 80 ? connectionString.Substring(0, 80) + "..." : connectionString);
     try
     {
+        // Usar UriBuilder para manejar mejor los caracteres especiales
         var uri = new Uri(connectionString);
         var host = uri.Host;
         var port = uri.Port > 0 ? uri.Port : 5432;
         var database = uri.AbsolutePath.TrimStart('/');
-        var username = uri.UserInfo.Split(':')[0];
-        var password = uri.UserInfo.Split(':').Length > 1 ? uri.UserInfo.Split(':')[1] : "";
         
-        connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+        // Parsear UserInfo manualmente para manejar caracteres especiales en la contraseña
+        var userInfo = uri.UserInfo;
+        string username = "";
+        string password = "";
+        
+        if (!string.IsNullOrEmpty(userInfo))
+        {
+            var colonIndex = userInfo.IndexOf(':');
+            if (colonIndex >= 0)
+            {
+                username = Uri.UnescapeDataString(userInfo.Substring(0, colonIndex));
+                password = Uri.UnescapeDataString(userInfo.Substring(colonIndex + 1));
+            }
+            else
+            {
+                username = Uri.UnescapeDataString(userInfo);
+            }
+        }
+        
+        // Escapar caracteres especiales en el password para el connection string
+        var escapedPassword = password.Replace(";", "\\;").Replace("'", "\\'");
+        
+        connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={escapedPassword};SSL Mode=Require;Trust Server Certificate=true";
         Log.Information("Connection string convertido exitosamente (longitud: {Length})", connectionString.Length);
+        Log.Information("Connection string convertido (Host: {Host}, Port: {Port}, Database: {Database}, Username: {Username})", 
+            host, port, database, username);
     }
     catch (Exception ex)
     {
         Log.Error(ex, "Error al convertir connection string de formato URI: {Message}", ex.Message);
+        Log.Error("Connection string que causó el error: {ConnectionString}", connectionString);
         throw new InvalidOperationException($"Error al convertir connection string de formato URI: {ex.Message}", ex);
     }
 }
@@ -338,6 +364,12 @@ else if (isPostgreSQL)
 {
     // PostgreSQL (Render, producción)
     Log.Information("Configurando Entity Framework para PostgreSQL");
+    Log.Information("Connection string final para Npgsql (longitud: {Length}): {ConnectionString}", 
+        connectionString.Length, 
+        connectionString.Contains("Password=") 
+            ? connectionString.Substring(0, connectionString.IndexOf("Password=") + 9) + "***" 
+            : connectionString.Substring(0, Math.Min(100, connectionString.Length)));
+    
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseNpgsql(connectionString, npgsqlOptions =>
