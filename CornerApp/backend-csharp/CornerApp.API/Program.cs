@@ -502,10 +502,8 @@ if (!string.IsNullOrEmpty(redisConnectionString))
     });
     
     // También mantener Memory Cache como fallback
-    builder.Services.AddMemoryCache(options =>
-    {
-        options.SizeLimit = 1024;
-    });
+    // Nota: No usar SizeLimit para evitar conflictos con AspNetCoreRateLimit
+    builder.Services.AddMemoryCache();
     
     Log.Information("Redis configurado como Distributed Cache: {ConnectionString}", 
         redisConnectionString.Replace("password=", "password=***"));
@@ -513,10 +511,8 @@ if (!string.IsNullOrEmpty(redisConnectionString))
 else
 {
     // Solo Memory Cache si Redis no está configurado
-    builder.Services.AddMemoryCache(options =>
-    {
-        options.SizeLimit = 1024; // Límite de tamaño en MB
-    });
+    // Nota: No usar SizeLimit para evitar conflictos con AspNetCoreRateLimit
+    builder.Services.AddMemoryCache();
     
     Log.Information("Usando Memory Cache (Redis no configurado)");
 }
@@ -719,8 +715,9 @@ app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Rate Limiting (solo en producción o si está habilitado)
-var enableRateLimit = !app.Environment.IsDevelopment() || 
-    app.Configuration.GetValue<bool>("IpRateLimiting:EnableEndpointRateLimiting", false);
+// TEMPORALMENTE DESHABILITADO hasta resolver el problema de SizeLimit con MemoryCache
+var enableRateLimit = false; // !app.Environment.IsDevelopment() || 
+    // app.Configuration.GetValue<bool>("IpRateLimiting:EnableEndpointRateLimiting", false);
 if (enableRateLimit)
 {
     app.UseIpRateLimiting();
