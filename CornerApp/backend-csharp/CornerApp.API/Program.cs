@@ -334,6 +334,21 @@ if (isPostgreSQL && (connectionString.Contains("postgresql://", StringComparison
         Log.Information("Connection string convertido exitosamente (longitud: {Length})", connectionString.Length);
         Log.Information("Connection string convertido (Host: {Host}, Port: {Port}, Database: {Database}, Username: {Username})", 
             host, port, database, username);
+        
+        // Validar que el connection string convertido no contenga el formato URI
+        if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+            || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Error("ERROR: El connection string convertido todavía contiene formato URI. Esto no debería pasar.");
+            throw new InvalidOperationException("El connection string convertido todavía contiene formato URI");
+        }
+        
+        // Validar que el connection string convertido tenga el formato correcto
+        if (!connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase))
+        {
+            Log.Error("ERROR: El connection string convertido no tiene el formato correcto (falta Host=)");
+            throw new InvalidOperationException("El connection string convertido no tiene el formato correcto");
+        }
     }
     catch (Exception ex)
     {
@@ -364,15 +379,29 @@ else if (isPostgreSQL)
 {
     // PostgreSQL (Render, producción)
     Log.Information("Configurando Entity Framework para PostgreSQL");
+    
+    // Validación final: asegurar que el connection string NO esté en formato URI
+    if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+        || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase))
+    {
+        Log.Error("ERROR CRÍTICO: El connection string todavía está en formato URI cuando debería estar convertido.");
+        Log.Error("Connection string problemático: {ConnectionString}", 
+            connectionString.Length > 200 ? connectionString.Substring(0, 200) + "..." : connectionString);
+        throw new InvalidOperationException("El connection string está en formato URI y no se convirtió correctamente. Esto es un error crítico.");
+    }
+    
     Log.Information("Connection string final para Npgsql (longitud: {Length}): {ConnectionString}", 
         connectionString.Length, 
         connectionString.Contains("Password=") 
             ? connectionString.Substring(0, connectionString.IndexOf("Password=") + 9) + "***" 
             : connectionString.Substring(0, Math.Min(100, connectionString.Length)));
     
+    // Guardar el connection string convertido en una variable local para asegurar que se use
+    var finalConnectionString = connectionString;
+    
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
+        options.UseNpgsql(finalConnectionString, npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 3,
