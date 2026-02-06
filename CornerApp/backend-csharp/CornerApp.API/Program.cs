@@ -327,9 +327,19 @@ else if (isPostgreSQL)
 }
 else
 {
-    // SQL Server (producción y desarrollo con SSMS)
-    // Configuración optimizada para producción con connection pooling
-    Log.Warning("Configurando Entity Framework para SQL Server. Si esperabas PostgreSQL, verifica el connection string.");
+    // SQL Server (solo desarrollo local)
+    // En producción, requerir explícitamente PostgreSQL
+    if (!builder.Environment.IsDevelopment())
+    {
+        Log.Error("ERROR: No se detectó PostgreSQL en producción. Connection String: {ConnectionString}", connectionStringForLog);
+        throw new InvalidOperationException(
+            "En producción se requiere PostgreSQL. " +
+            "Configure la variable de entorno CONNECTION_STRING con el connection string de PostgreSQL. " +
+            "Formato esperado: postgresql://usuario:password@host:puerto/database");
+    }
+    
+    // Solo permitir SQL Server en desarrollo
+    Log.Warning("Configurando Entity Framework para SQL Server (solo desarrollo).");
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(connectionString, sqlOptions =>
