@@ -263,8 +263,7 @@ else if (connectionString.Contains("postgresql://") || connectionString.Contains
             // Habilitar retry logic para resiliencia
             npgsqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorNumbersToAdd: null);
+                maxRetryDelay: TimeSpan.FromSeconds(5));
             
             // Configuración de comandos
             npgsqlOptions.CommandTimeout(30); // 30 segundos timeout por defecto
@@ -292,8 +291,7 @@ else
             // Habilitar retry logic para resiliencia
             sqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorNumbersToAdd: null);
+                maxRetryDelay: TimeSpan.FromSeconds(5));
             
             // Configuración de comandos
             sqlOptions.CommandTimeout(30); // 30 segundos timeout por defecto
