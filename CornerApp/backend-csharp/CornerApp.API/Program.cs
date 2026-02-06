@@ -253,6 +253,34 @@ if (connectionString.Contains("Data Source=") && !connectionString.Contains("Ser
         }
     });
 }
+else if (connectionString.Contains("postgresql://") || connectionString.Contains("Host=") || (connectionString.Contains("Server=") && connectionString.Contains("Database=") && connectionString.Contains("User Id=") && !connectionString.Contains("Trusted_Connection")))
+{
+    // PostgreSQL (Render, producción con PostgreSQL)
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    {
+        options.UseNpgsql(connectionString, npgsqlOptions =>
+        {
+            // Habilitar retry logic para resiliencia
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorNumbersToAdd: null);
+            
+            // Configuración de comandos
+            npgsqlOptions.CommandTimeout(30); // 30 segundos timeout por defecto
+        });
+        
+        // Habilitar sensitive data logging solo en desarrollo
+        if (builder.Environment.IsDevelopment())
+        {
+            options.EnableSensitiveDataLogging();
+            options.EnableDetailedErrors();
+        }
+        
+        // Configuración de query tracking
+        options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
+    });
+}
 else
 {
     // SQL Server (producción y desarrollo con SSMS)
