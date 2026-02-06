@@ -242,7 +242,7 @@ Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction
 var connectionString = builder.Environment.IsProduction()
     ? (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
         ?? builder.Configuration["CONNECTION_STRING"]
-        ?? "postgresql://cornerappdb_user:4WooAkinpyDOliTZFk7FAqFJJoNGO7zS@dpg-d62kjuogjchc73bq48qg-a.virginia-postgres.render.com/cornerappdb")
+        ?? "postgresql://cornerappdb_user:4WooAkinpyD01iTZFk7FAqFJJoNG07zS@dpg-d62kjuogjchc73bq48qg-a.virginia-postgres.render.com/cornerappdb")
     : (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
         ?? builder.Configuration["CONNECTION_STRING"] 
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
