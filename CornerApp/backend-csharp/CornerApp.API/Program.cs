@@ -241,7 +241,7 @@ Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction
 var connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
     ?? builder.Configuration["CONNECTION_STRING"] 
     ?? (builder.Environment.IsProduction() 
-        ? "postgresql://cornerappdb_user:4WooAkinpyDOliTZFk7FAqFJJoNGO7zS@dpg-d62kjuogjchc73bq48qg-a/cornerappdb"
+        ? "postgresql://cornerappdb_user:4WooAkinpyDOliTZFk7FAqFJJoNGO7zS@dpg-d62kjuogjchc73bq48qg-a.virginia-postgres.render.com/cornerappdb"
         : builder.Configuration.GetConnectionString("DefaultConnection"))
     ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
 
