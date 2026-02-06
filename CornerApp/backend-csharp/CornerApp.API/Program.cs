@@ -8,8 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using System.Collections.Generic;
-using System.Text.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using HealthChecks.UI.Client;
@@ -319,43 +317,51 @@ else
 }
 
 // Configurar CORS con optimizaciones
-// Render puede pasar arrays como JSON string o como variables indexadas
-var allowedOriginsConfig = builder.Configuration.GetSection("Cors:AllowedOrigins");
-var allowedOrigins = new List<string>();
+// Intentar leer como array primero, luego como string JSON
+string[]? allowedOrigins = null;
 
-// Intentar leer como array directo
-var originsArray = allowedOriginsConfig.Get<string[]>();
-if (originsArray != null && originsArray.Length > 0)
+// Primero intentar leer como array (formato: Cors__AllowedOrigins__0, Cors__AllowedOrigins__1, etc.)
+var corsOriginsSection = builder.Configuration.GetSection("Cors:AllowedOrigins");
+if (corsOriginsSection.Exists())
 {
-    allowedOrigins.AddRange(originsArray);
+    allowedOrigins = corsOriginsSection.Get<string[]>();
 }
-else
+
+// Si no se pudo leer como array, intentar como string JSON
+if (allowedOrigins == null || allowedOrigins.Length == 0)
 {
-    // Intentar leer como string JSON (formato de Render: ["url1", "url2"])
-    var originsJson = builder.Configuration["Cors:AllowedOrigins"] ?? builder.Configuration["Cors__AllowedOrigins"];
-    if (!string.IsNullOrEmpty(originsJson))
+    var corsOriginsString = builder.Configuration["Cors:AllowedOrigins"] 
+        ?? builder.Configuration["Cors__AllowedOrigins"];
+    
+    if (!string.IsNullOrEmpty(corsOriginsString))
     {
         try
         {
-            var parsed = System.Text.Json.JsonSerializer.Deserialize<string[]>(originsJson);
-            if (parsed != null)
+            // Limpiar el string (quitar espacios, comillas extra, etc.)
+            corsOriginsString = corsOriginsString.Trim().Trim('"', '\'', '[', ']');
+            
+            // Intentar parsear como JSON array
+            if (corsOriginsString.StartsWith('['))
             {
-                allowedOrigins.AddRange(parsed);
+                allowedOrigins = System.Text.Json.JsonSerializer.Deserialize<string[]>(corsOriginsString);
+            }
+            else
+            {
+                // Si no es JSON, tratar como string simple
+                allowedOrigins = new[] { corsOriginsString };
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Si falla el parseo, intentar como string simple
-            allowedOrigins.Add(originsJson.Trim('"', '[', ']'));
+            Log.Warning($"Error al parsear Cors:AllowedOrigins: {ex.Message}. Usando valor por defecto.");
+            allowedOrigins = null;
         }
     }
 }
 
-// Si no hay orígenes configurados, usar valores por defecto
-if (allowedOrigins.Count == 0)
-{
-    allowedOrigins.AddRange(new[] { "http://localhost:3000", "http://localhost:19006", "exp://localhost:19000" });
-}
+allowedOrigins ??= new[] { "http://localhost:3000", "http://localhost:19006", "exp://localhost:19000" };
+
+Log.Information($"CORS Allowed Origins configurados: {string.Join(", ", allowedOrigins)}");
 
 var allowCredentials = builder.Configuration.GetValue<bool>("Cors:AllowCredentials", false);
 var maxAge = builder.Configuration.GetValue<int>("Cors:MaxAge", 3600); // 1 hora por defecto
@@ -377,7 +383,7 @@ builder.Services.AddCors(options =>
         else
         {
             // En producción, solo orígenes específicos con configuración optimizada
-            policy.WithOrigins(allowedOrigins.ToArray())
+            policy.WithOrigins(allowedOrigins)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .AllowCredentials() // Necesario para SignalR
@@ -721,8 +727,7 @@ if (enableRateLimit)
 }
 
 // CORS debe ir ANTES de UseAuthorization y UseHttpsRedirection
-// El middleware de optimización CORS maneja preflight requests de manera eficiente
-app.UseMiddleware<CorsOptimizationMiddleware>();
+// ASP.NET Core maneja preflight requests automáticamente con UseCors
 app.UseCors("AllowReactNative");
 
 // Compresión de respuestas (debe ir antes de otros middlewares que escriben respuestas)
