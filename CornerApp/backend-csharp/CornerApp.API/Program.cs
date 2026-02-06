@@ -251,12 +251,13 @@ if (builder.Environment.IsProduction())
         envConnectionString != null, envConnectionString?.Length ?? 0);
     
     // Usar variable de entorno o fallback hardcodeado (PostgreSQL)
+    // Usar formato tradicional directamente para evitar problemas de conversión
     connectionString = envConnectionString 
-        ?? "postgresql://cornerappdb_user:4WooAkinpyD01iTZFk7FAqFJJoNG07zS@dpg-d62kjuogjchc73bq48qg-a/cornerappdb";
+        ?? "Host=dpg-d62kjuogjchc73bq48qg-a;Port=5432;Database=cornerappdb;Username=cornerappdb_user;Password=4WooAkinpyD01iTZFk7FAqFJJoNG07zS;SSL Mode=Require;Trust Server Certificate=true";
     
     Log.Information("Connection String final seleccionado: {Source}", 
         envConnectionString != null ? "Environment Variable" 
-        : "Hardcoded Fallback (PostgreSQL)");
+        : "Hardcoded Fallback (PostgreSQL - formato tradicional)");
 }
 else
 {
