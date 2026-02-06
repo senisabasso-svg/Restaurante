@@ -234,6 +234,10 @@ builder.Services.AddSingleton<ISecretsService, SecretsService>();
 var tempServiceProvider = builder.Services.BuildServiceProvider();
 var secretsService = tempServiceProvider.GetRequiredService<ISecretsService>();
 // Configurar connection string - En producción usar PostgreSQL de Render
+Log.Information("=== INICIO CONFIGURACIÓN BASE DE DATOS ===");
+Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
+Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
+
 var connectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
     ?? builder.Configuration["CONNECTION_STRING"] 
     ?? (builder.Environment.IsProduction() 
@@ -242,11 +246,15 @@ var connectionString = Task.Run(async () => await secretsService.GetSecretAsync(
     ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json");
 
 Log.Information("Connection String configurado (longitud: {Length})", connectionString?.Length ?? 0);
+Log.Information("Connection String (primeros 80 caracteres): {ConnectionString}", 
+    connectionString.Length > 80 ? connectionString.Substring(0, 80) + "..." : connectionString);
 
 // Detectar tipo de base de datos
 var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
     || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)
     || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase);
+
+Log.Information("Detección - isPostgreSQL: {IsPostgreSQL}", isPostgreSQL);
 
 var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
     && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
