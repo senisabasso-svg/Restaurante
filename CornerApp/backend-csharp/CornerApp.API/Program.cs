@@ -235,6 +235,10 @@ var tempServiceProvider = builder.Services.BuildServiceProvider();
 var secretsService = tempServiceProvider.GetRequiredService<ISecretsService>();
 // TEMPORAL: Connection string hardcodeado para Render (solo producción)
 // En producción, priorizar CONNECTION_STRING o usar el hardcodeado, NO usar appsettings.json
+Log.Information("=== INICIO CONFIGURACIÓN CONNECTION STRING ===");
+Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
+Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
+
 var connectionString = builder.Environment.IsProduction()
     ? (Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result
         ?? builder.Configuration["CONNECTION_STRING"]
@@ -243,6 +247,8 @@ var connectionString = builder.Environment.IsProduction()
         ?? builder.Configuration["CONNECTION_STRING"] 
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("Connection string no configurado. Configure la variable de entorno CONNECTION_STRING o el valor en appsettings.json"));
+
+Log.Information("Connection String obtenido (longitud: {Length})", connectionString?.Length ?? 0);
 
 // Log del tipo de connection string (sin mostrar la contraseña)
 var connectionStringForLog = connectionString.Length > 50 
