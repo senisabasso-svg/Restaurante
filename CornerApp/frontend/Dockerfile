@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar dependencias
-RUN npm ci
+RUN npm install
 
 # Copiar código fuente
 COPY . .
@@ -17,6 +17,9 @@ RUN npm run build
 
 # Etapa 2: Production
 FROM nginx:alpine
+
+# Instalar wget para health check
+RUN apk add --no-cache wget
 
 # Copiar archivos build
 COPY --from=build /app/dist /usr/share/nginx/html
