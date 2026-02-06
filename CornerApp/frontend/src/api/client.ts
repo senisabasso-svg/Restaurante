@@ -3,36 +3,12 @@
  * Maneja todas las peticiones HTTP al backend
  */
 
-import { 
-  MOCK_RESTAURANT, 
-  MOCK_PRODUCTS, 
-  MOCK_SUBPRODUCTS, 
-  MOCK_SPACES, 
-  MOCK_TABLES,
-  MOCK_DELIVERY_PERSON,
-  MOCK_CUSTOMER,
-  MOCK_ORDER_IN_KITCHEN,
-  MOCK_CASH_REGISTER_STATUS,
-  MOCK_CASH_REGISTER,
-  MOCK_REPORT_STATS,
-  MOCK_REVENUE_DATA,
-  MOCK_TOP_PRODUCTS,
-  MOCK_REVENUE_BY_PAYMENT,
-  MOCK_COMPARISON_DATA,
-  MOCK_PEAK_HOURS_DATA,
-  MOCK_DELIVERY_PERFORMANCE,
-  MOCK_CASH_REGISTERS_REPORT,
-  mockDelay 
-} from '../data/mockData';
-
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-const USE_MOCK_DATA = true; // Cambiar a false cuando el backend funcione
 
 // Debug: Verificar que la variable esté configurada
 if (typeof window !== 'undefined') {
   console.log('VITE_API_URL:', import.meta.env.VITE_API_URL);
   console.log('API_BASE_URL:', API_BASE_URL);
-  console.log('USE_MOCK_DATA:', USE_MOCK_DATA);
 }
 
 interface RequestOptions {
@@ -50,13 +26,6 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    // Modo MOCK: Devolver datos hardcodeados
-    if (USE_MOCK_DATA) {
-      console.log('🔧 [MOCK] Usando datos mock para:', endpoint);
-      await mockDelay(300);
-      return this.getMockData<T>(endpoint, options);
-    }
-
     const { method = 'GET', body, headers = {}, skipAuth = false } = options;
 
     // Obtener token del localStorage (admin, mozo o repartidor) solo si no se omite la autenticación
@@ -77,6 +46,9 @@ class ApiClient {
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, config);
+
+      // Handle empty responses
+      const text = await response.text();
 
       if (!response.ok) {
         // Si es 401 (No autorizado), limpiar tokens y redirigir al login apropiado
@@ -99,13 +71,10 @@ class ApiClient {
           throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
         }
 
-        // Si falla, usar datos mock como fallback
-        console.warn('⚠️ Backend error, usando datos MOCK para:', endpoint);
-        return this.getMockData<T>(endpoint, options);
+        // Re-lanzar el error para que el componente lo maneje
+        const errorData = text ? JSON.parse(text) : { message: `Error ${response.status}` };
+        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
       }
-
-      // Handle empty responses
-      const text = await response.text();
       if (!text) {
         return {} as T;
       }
@@ -124,152 +93,11 @@ class ApiClient {
       
       return parsed as T;
     } catch (error: any) {
-      // Si hay error de red, usar datos mock como fallback
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_INTERNET_DISCONNECTED') || error.message?.includes('NetworkError')) {
-        console.warn('⚠️ Error de red, usando datos MOCK para:', endpoint);
-        return this.getMockData<T>(endpoint, options);
-      }
+      // Re-lanzar el error para que el componente lo maneje
       throw error;
     }
   }
 
-  private getMockData<T>(endpoint: string, options: RequestOptions = {}): T {
-    const method = options.method || 'GET';
-    
-    // Restaurantes
-    if (endpoint.includes('/api/restaurants') && method === 'GET') {
-      return [MOCK_RESTAURANT] as T;
-    }
-    
-    // Productos
-    if ((endpoint.includes('/api/products') || endpoint.includes('/admin/api/products')) && method === 'GET') {
-      return MOCK_PRODUCTS as T;
-    }
-    
-    // Subproductos
-    if (endpoint.includes('/api/subproducts') && method === 'GET') {
-      return MOCK_SUBPRODUCTS as T;
-    }
-    
-    // Espacios
-    if (endpoint.includes('/api/spaces') && method === 'GET') {
-      return MOCK_SPACES as T;
-    }
-    
-    // Mesas
-    if (endpoint.includes('/api/tables') && method === 'GET') {
-      return MOCK_TABLES as T;
-    }
-    
-    // Categorías
-    if (endpoint.includes('/api/categories') && method === 'GET') {
-      return [{
-        id: 1,
-        restaurantId: 12,
-        name: "Bebidas",
-        description: "Categoría de bebidas",
-        displayOrder: 1,
-        isActive: true
-      }] as T;
-    }
-    
-    // Dashboard stats
-    if (endpoint.includes('/admin/api/reports/dashboard-stats')) {
-      return {
-        pendingOrders: 1,
-        preparingOrders: 1,
-        deliveringOrders: 0,
-        todayRevenue: 125000,
-        todayOrders: 25,
-        totalActiveOrders: 2,
-        pendingReceiptsCount: 0
-      } as T;
-    }
-    
-    // Orders activos (para cocina)
-    if (endpoint.includes('/admin/api/orders/active') && method === 'GET') {
-      return [MOCK_ORDER_IN_KITCHEN] as T;
-    }
-    
-    // Orders (general)
-    if (endpoint.includes('/admin/api/orders') && method === 'GET') {
-      return {
-        data: [MOCK_ORDER_IN_KITCHEN],
-        totalCount: 1,
-        page: 1,
-        pageSize: 10,
-        totalPages: 1
-      } as T;
-    }
-    
-    // Repartidores
-    if ((endpoint.includes('/admin/api/delivery-persons') || endpoint.includes('/api/delivery-persons')) && method === 'GET') {
-      return [MOCK_DELIVERY_PERSON] as T;
-    }
-    
-    // Clientes
-    if (endpoint.includes('/api/customers') && method === 'GET') {
-      return [MOCK_CUSTOMER] as T;
-    }
-    
-    // Estado de caja
-    if (endpoint.includes('/api/cash-register/status') && method === 'GET') {
-      return MOCK_CASH_REGISTER_STATUS as T;
-    }
-    
-    // Caja
-    if (endpoint.includes('/api/cash-register') && method === 'GET' && !endpoint.includes('status')) {
-      return MOCK_CASH_REGISTER as T;
-    }
-    
-    // Reportes - Estadísticas
-    if (endpoint.includes('/admin/api/reports/stats') && method === 'GET') {
-      return MOCK_REPORT_STATS as T;
-    }
-    
-    // Reportes - Ingresos
-    if (endpoint.includes('/admin/api/reports/revenue') && method === 'GET') {
-      return MOCK_REVENUE_DATA as T;
-    }
-    
-    // Reportes - Productos más vendidos
-    if (endpoint.includes('/admin/api/reports/top-products') && method === 'GET') {
-      return MOCK_TOP_PRODUCTS as T;
-    }
-    
-    // Reportes - Ingresos por método de pago
-    if (endpoint.includes('/admin/api/reports/revenue-by-payment') && method === 'GET') {
-      return MOCK_REVENUE_BY_PAYMENT as T;
-    }
-    
-    // Reportes - Comparación
-    if (endpoint.includes('/admin/api/reports/comparison') && method === 'GET') {
-      return MOCK_COMPARISON_DATA as T;
-    }
-    
-    // Reportes - Horas pico
-    if (endpoint.includes('/admin/api/reports/peak-hours') && method === 'GET') {
-      return MOCK_PEAK_HOURS_DATA as T;
-    }
-    
-    // Reportes - Rendimiento de repartidores
-    if (endpoint.includes('/admin/api/reports/delivery-performance') && method === 'GET') {
-      return MOCK_DELIVERY_PERFORMANCE as T;
-    }
-    
-    // Reportes - Cajas
-    if (endpoint.includes('/admin/api/reports/cash-registers') && method === 'GET') {
-      return MOCK_CASH_REGISTERS_REPORT as T;
-    }
-    
-    // Por defecto para POST/PUT/DELETE, devolver éxito
-    if (method !== 'GET') {
-      return { success: true, message: 'Operación completada (MOCK)' } as T;
-    }
-    
-    // Por defecto, devolver array vacío o objeto vacío
-    return (Array.isArray([]) ? [] : {}) as T;
-  }
 
   // Orders
   async getActiveOrders() {
