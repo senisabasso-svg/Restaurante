@@ -238,26 +238,14 @@ Log.Information("=== INICIO CONFIGURACIÓN BASE DE DATOS ===");
 Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
 Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
 
-// En producción, usar PostgreSQL de Render directamente, NO leer de appsettings.json
-// IMPORTANTE: NO usar SecretsService en producción porque lee de appsettings.json (SQL Server)
-// Usar Environment.GetEnvironmentVariable para asegurar que solo lea de variables de entorno
+// En producción, HARDCODEAR directamente el connection string de PostgreSQL
+// NO leer de variables de entorno, NO leer de appsettings.json, SOLO hardcodeado
 string? connectionString = null;
 if (builder.Environment.IsProduction())
 {
-    // En producción, SOLO usar variable de entorno o fallback hardcodeado
-    // NO usar SecretsService porque lee de appsettings.json que tiene SQL Server
-    var envConnectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
-    Log.Information("Variable de entorno CONNECTION_STRING: {HasValue} (longitud: {Length})", 
-        envConnectionString != null, envConnectionString?.Length ?? 0);
-    
-    // Usar variable de entorno o fallback hardcodeado (PostgreSQL)
-    // Usar formato tradicional directamente para evitar problemas de conversión
-    connectionString = envConnectionString 
-        ?? "Host=dpg-d62kjuogjchc73bq48qg-a;Port=5432;Database=cornerappdb;Username=cornerappdb_user;Password=4WooAkinpyD01iTZFk7FAqFJJoNG07zS;SSL Mode=Require;Trust Server Certificate=true";
-    
-    Log.Information("Connection String final seleccionado: {Source}", 
-        envConnectionString != null ? "Environment Variable" 
-        : "Hardcoded Fallback (PostgreSQL - formato tradicional)");
+    // PRODUCCIÓN: Connection string hardcodeado directamente - PostgreSQL de Render
+    connectionString = "Host=dpg-d62kjuogjchc73bq48qg-a;Port=5432;Database=cornerappdb;Username=cornerappdb_user;Password=4WooAkinpyD01iTZFk7FAqFJJoNG07zS;SSL Mode=Require;Trust Server Certificate=true";
+    Log.Information("PRODUCCIÓN: Usando connection string hardcodeado de PostgreSQL (Render)");
 }
 else
 {
@@ -269,95 +257,13 @@ else
 }
 
 Log.Information("Connection String configurado (longitud: {Length})", connectionString?.Length ?? 0);
-var connectionStringForLog = connectionString.Length > 80 
-    ? connectionString.Substring(0, 80) + "..." 
-    : connectionString;
-// Ocultar contraseña si está presente
-if (connectionStringForLog.Contains("password=", StringComparison.OrdinalIgnoreCase) || connectionStringForLog.Contains("@"))
-{
-    var passwordIndex = connectionStringForLog.IndexOf(":", connectionStringForLog.IndexOf("://") + 3);
-    if (passwordIndex >= 0)
-    {
-        var atIndex = connectionStringForLog.IndexOf("@", passwordIndex);
-        if (atIndex >= 0)
-        {
-            connectionStringForLog = connectionStringForLog.Substring(0, passwordIndex + 1) + "***" + connectionStringForLog.Substring(atIndex);
-        }
-    }
-}
-Log.Information("Connection String (primeros 80 caracteres): {ConnectionString}", connectionStringForLog);
 
 // Detectar tipo de base de datos
-var isPostgreSQL = connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
-    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)
-    || connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase);
+var isPostgreSQL = connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+    || connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
+    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase);
 
 Log.Information("Detección - isPostgreSQL: {IsPostgreSQL}", isPostgreSQL);
-
-// Si es PostgreSQL y está en formato URI, convertir a formato tradicional de Npgsql
-if (isPostgreSQL && (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
-    || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase)))
-{
-    Log.Information("Convirtiendo connection string de formato URI a formato tradicional de Npgsql...");
-    Log.Information("Connection string original (primeros 80 caracteres): {ConnectionString}", 
-        connectionString.Length > 80 ? connectionString.Substring(0, 80) + "..." : connectionString);
-    try
-    {
-        // Usar UriBuilder para manejar mejor los caracteres especiales
-        var uri = new Uri(connectionString);
-        var host = uri.Host;
-        var port = uri.Port > 0 ? uri.Port : 5432;
-        var database = uri.AbsolutePath.TrimStart('/');
-        
-        // Parsear UserInfo manualmente para manejar caracteres especiales en la contraseña
-        var userInfo = uri.UserInfo;
-        string username = "";
-        string password = "";
-        
-        if (!string.IsNullOrEmpty(userInfo))
-        {
-            var colonIndex = userInfo.IndexOf(':');
-            if (colonIndex >= 0)
-            {
-                username = Uri.UnescapeDataString(userInfo.Substring(0, colonIndex));
-                password = Uri.UnescapeDataString(userInfo.Substring(colonIndex + 1));
-            }
-            else
-            {
-                username = Uri.UnescapeDataString(userInfo);
-            }
-        }
-        
-        // Escapar caracteres especiales en el password para el connection string
-        var escapedPassword = password.Replace(";", "\\;").Replace("'", "\\'");
-        
-        connectionString = $"Host={host};Port={port};Database={database};Username={username};Password={escapedPassword};SSL Mode=Require;Trust Server Certificate=true";
-        Log.Information("Connection string convertido exitosamente (longitud: {Length})", connectionString.Length);
-        Log.Information("Connection string convertido (Host: {Host}, Port: {Port}, Database: {Database}, Username: {Username})", 
-            host, port, database, username);
-        
-        // Validar que el connection string convertido no contenga el formato URI
-        if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
-            || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase))
-        {
-            Log.Error("ERROR: El connection string convertido todavía contiene formato URI. Esto no debería pasar.");
-            throw new InvalidOperationException("El connection string convertido todavía contiene formato URI");
-        }
-        
-        // Validar que el connection string convertido tenga el formato correcto
-        if (!connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase))
-        {
-            Log.Error("ERROR: El connection string convertido no tiene el formato correcto (falta Host=)");
-            throw new InvalidOperationException("El connection string convertido no tiene el formato correcto");
-        }
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Error al convertir connection string de formato URI: {Message}", ex.Message);
-        Log.Error("Connection string que causó el error: {ConnectionString}", connectionString);
-        throw new InvalidOperationException($"Error al convertir connection string de formato URI: {ex.Message}", ex);
-    }
-}
 
 var isSQLite = connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) 
     && !connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase);
@@ -380,29 +286,11 @@ else if (isPostgreSQL)
 {
     // PostgreSQL (Render, producción)
     Log.Information("Configurando Entity Framework para PostgreSQL");
-    
-    // Validación final: asegurar que el connection string NO esté en formato URI
-    if (connectionString.Contains("postgresql://", StringComparison.OrdinalIgnoreCase) 
-        || connectionString.Contains("postgres://", StringComparison.OrdinalIgnoreCase))
-    {
-        Log.Error("ERROR CRÍTICO: El connection string todavía está en formato URI cuando debería estar convertido.");
-        Log.Error("Connection string problemático: {ConnectionString}", 
-            connectionString.Length > 200 ? connectionString.Substring(0, 200) + "..." : connectionString);
-        throw new InvalidOperationException("El connection string está en formato URI y no se convirtió correctamente. Esto es un error crítico.");
-    }
-    
-    Log.Information("Connection string final para Npgsql (longitud: {Length}): {ConnectionString}", 
-        connectionString.Length, 
-        connectionString.Contains("Password=") 
-            ? connectionString.Substring(0, connectionString.IndexOf("Password=") + 9) + "***" 
-            : connectionString.Substring(0, Math.Min(100, connectionString.Length)));
-    
-    // Guardar el connection string convertido en una variable local para asegurar que se use
-    var finalConnectionString = connectionString;
+    Log.Information("Connection string para Npgsql (longitud: {Length})", connectionString.Length);
     
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
-        options.UseNpgsql(finalConnectionString, npgsqlOptions =>
+        options.UseNpgsql(connectionString, npgsqlOptions =>
         {
             npgsqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 3,
