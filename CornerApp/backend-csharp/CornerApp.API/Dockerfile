@@ -2,8 +2,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copiar archivos de proyecto (el contexto debe ser CornerApp/backend-csharp)
+# Copiar archivos de configuración global primero
+COPY ["global.json", "./"]
+
+# Copiar archivos de proyecto
 COPY ["CornerApp.API/CornerApp.API.csproj", "CornerApp.API/"]
+
+# Restaurar dependencias
 RUN dotnet restore "CornerApp.API/CornerApp.API.csproj"
 
 # Copiar todo el código fuente
