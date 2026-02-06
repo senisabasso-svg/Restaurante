@@ -605,13 +605,14 @@ builder.Services.AddHttpClient(); // Para webhooks
 builder.Services.AddScoped<IWebhookService, WebhookService>();
 
 // Configurar Rate Limiting
-builder.Services.AddMemoryCache();
-builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
-builder.Services.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>();
-builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
-builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
-builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
-builder.Services.AddInMemoryRateLimiting();
+// TEMPORALMENTE DESHABILITADO hasta resolver el problema de SizeLimit con MemoryCache
+// builder.Services.AddMemoryCache(); // Ya está registrado arriba
+// builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+// builder.Services.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>();
+// builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
+// builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+// builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+// builder.Services.AddInMemoryRateLimiting();
 
 // Registrar servicio de métricas
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
