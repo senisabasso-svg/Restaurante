@@ -101,10 +101,10 @@ dotnet ef migrations add InitialPostgreSQLMigration
    - **Name**: `cornerapp-backend`
    - **Region**: Misma que la base de datos
    - **Branch**: `main` (o la rama que uses)
-   - **Root Directory**: `Restaurante/CornerApp/backend-csharp`
+   - **Root Directory**: `Restaurante/CornerApp/backend-csharp` ⚠️ **IMPORTANTE**: Debe incluir la ruta completa desde la raíz del repositorio
    - **Environment**: `Docker`
-   - **Dockerfile Path**: `CornerApp.API/Dockerfile`
-   - **Docker Context**: `CornerApp.API` (o el directorio correcto)
+   - **Dockerfile Path**: `CornerApp.API/Dockerfile` (relativo al Root Directory)
+   - **Docker Context**: Dejar vacío o usar `CornerApp.API` si Render lo requiere
 
 ### 3.2 Variables de Entorno del Backend
 
@@ -162,9 +162,9 @@ https://cornerapp-backend.onrender.com
    - **Name**: `cornerapp-frontend`
    - **Region**: Misma que backend y DB
    - **Branch**: `main`
-   - **Root Directory**: `Restaurante/CornerApp/frontend`
+   - **Root Directory**: `Restaurante/CornerApp/frontend` ⚠️ **IMPORTANTE**: Debe incluir la ruta completa desde la raíz del repositorio
    - **Environment**: `Docker`
-   - **Dockerfile Path**: `Dockerfile`
+   - **Dockerfile Path**: `Dockerfile` (relativo al Root Directory, así que solo `Dockerfile`)
 
 ### 4.2 Variables de Entorno del Frontend
 
