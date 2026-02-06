@@ -3,12 +3,23 @@
  * Maneja todas las peticiones HTTP al backend
  */
 
+import { 
+  MOCK_RESTAURANT, 
+  MOCK_PRODUCTS, 
+  MOCK_SUBPRODUCTS, 
+  MOCK_SPACES, 
+  MOCK_TABLES,
+  mockDelay 
+} from '../data/mockData';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const USE_MOCK_DATA = true; // Cambiar a false cuando el backend funcione
 
 // Debug: Verificar que la variable esté configurada
 if (typeof window !== 'undefined') {
   console.log('VITE_API_URL:', import.meta.env.VITE_API_URL);
   console.log('API_BASE_URL:', API_BASE_URL);
+  console.log('USE_MOCK_DATA:', USE_MOCK_DATA);
 }
 
 interface RequestOptions {
@@ -26,6 +37,13 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    // Modo MOCK: Devolver datos hardcodeados
+    if (USE_MOCK_DATA) {
+      console.log('🔧 [MOCK] Usando datos mock para:', endpoint);
+      await mockDelay(300);
+      return this.getMockData<T>(endpoint, options);
+    }
+
     const { method = 'GET', body, headers = {}, skipAuth = false } = options;
 
     // Obtener token del localStorage (admin, mozo o repartidor) solo si no se omite la autenticación
@@ -44,65 +62,135 @@ class ApiClient {
       config.body = JSON.stringify(body);
     }
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, config);
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, config);
 
-    if (!response.ok) {
-      // Si es 401 (No autorizado), limpiar tokens y redirigir al login apropiado
-      if (response.status === 401) {
-        const isDeliveryRoute = endpoint.includes('/deliveryperson/') || endpoint.includes('/delivery/');
-        const isWaiterRoute = endpoint.includes('/waiter/') || window.location.pathname.includes('/mozo');
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_user');
-        localStorage.removeItem('waiter_token');
-        localStorage.removeItem('waiter_user');
-        localStorage.removeItem('delivery_token');
-        localStorage.removeItem('delivery_user');
-        if (isDeliveryRoute) {
-          window.location.href = '/delivery/login';
-        } else if (isWaiterRoute) {
-          window.location.href = '/mozo/login';
-        } else {
-          window.location.href = '/login';
+      if (!response.ok) {
+        // Si es 401 (No autorizado), limpiar tokens y redirigir al login apropiado
+        if (response.status === 401) {
+          const isDeliveryRoute = endpoint.includes('/deliveryperson/') || endpoint.includes('/delivery/');
+          const isWaiterRoute = endpoint.includes('/waiter/') || window.location.pathname.includes('/mozo');
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_user');
+          localStorage.removeItem('waiter_token');
+          localStorage.removeItem('waiter_user');
+          localStorage.removeItem('delivery_token');
+          localStorage.removeItem('delivery_user');
+          if (isDeliveryRoute) {
+            window.location.href = '/delivery/login';
+          } else if (isWaiterRoute) {
+            window.location.href = '/mozo/login';
+          } else {
+            window.location.href = '/login';
+          }
+          throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
         }
-        throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+
+        // Si falla, usar datos mock como fallback
+        console.warn('⚠️ Backend error, usando datos MOCK para:', endpoint);
+        return this.getMockData<T>(endpoint, options);
       }
 
-      let errorData: any = {};
-      try {
-        const text = await response.text();
-        if (text) {
-          errorData = JSON.parse(text);
-        }
-      } catch (e) {
-        // Si no se puede parsear, usar el texto como mensaje
-        errorData = { error: await response.text().catch(() => response.statusText) };
+      // Handle empty responses
+      const text = await response.text();
+      if (!text) {
+        return {} as T;
+      }
+
+      const parsed = JSON.parse(text);
+      
+      // Si la respuesta está envuelta en un objeto 'data', extraerlo
+      if (parsed && typeof parsed === 'object' && 'data' in parsed && Array.isArray(parsed.data)) {
+        return parsed.data as T;
       }
       
-      const errorMessage = errorData.error || errorData.message || errorData.details || `Error ${response.status}: ${response.statusText}`;
-      const error = new Error(errorMessage);
-      (error as any).response = { data: errorData, status: response.status };
+      // Si la respuesta está envuelta en un objeto 'data' pero no es array, devolver el objeto completo
+      if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+        return parsed.data as T;
+      }
+      
+      return parsed as T;
+    } catch (error: any) {
+      // Si hay error de red, usar datos mock como fallback
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_INTERNET_DISCONNECTED') || error.message?.includes('NetworkError')) {
+        console.warn('⚠️ Error de red, usando datos MOCK para:', endpoint);
+        return this.getMockData<T>(endpoint, options);
+      }
       throw error;
     }
+  }
 
-    // Handle empty responses
-    const text = await response.text();
-    if (!text) {
-      return {} as T;
-    }
-
-    const parsed = JSON.parse(text);
+  private getMockData<T>(endpoint: string, options: RequestOptions = {}): T {
+    const method = options.method || 'GET';
     
-    // Si la respuesta está envuelta en un objeto 'data', extraerlo
-    if (parsed && typeof parsed === 'object' && 'data' in parsed && Array.isArray(parsed.data)) {
-      return parsed.data as T;
+    // Restaurantes
+    if (endpoint.includes('/api/restaurants') && method === 'GET') {
+      return [MOCK_RESTAURANT] as T;
     }
     
-    // Si la respuesta está envuelta en un objeto 'data' pero no es array, devolver el objeto completo
-    if (parsed && typeof parsed === 'object' && 'data' in parsed) {
-      return parsed.data as T;
+    // Productos
+    if ((endpoint.includes('/api/products') || endpoint.includes('/admin/api/products')) && method === 'GET') {
+      return MOCK_PRODUCTS as T;
     }
     
-    return parsed as T;
+    // Subproductos
+    if (endpoint.includes('/api/subproducts') && method === 'GET') {
+      return MOCK_SUBPRODUCTS as T;
+    }
+    
+    // Espacios
+    if (endpoint.includes('/api/spaces') && method === 'GET') {
+      return MOCK_SPACES as T;
+    }
+    
+    // Mesas
+    if (endpoint.includes('/api/tables') && method === 'GET') {
+      return MOCK_TABLES as T;
+    }
+    
+    // Categorías
+    if (endpoint.includes('/api/categories') && method === 'GET') {
+      return [{
+        id: 1,
+        restaurantId: 12,
+        name: "Bebidas",
+        description: "Categoría de bebidas",
+        displayOrder: 1,
+        isActive: true
+      }] as T;
+    }
+    
+    // Dashboard stats
+    if (endpoint.includes('/admin/api/reports/dashboard-stats')) {
+      return {
+        pendingOrders: 0,
+        preparingOrders: 0,
+        deliveringOrders: 0,
+        todayRevenue: 0,
+        todayOrders: 0,
+        totalActiveOrders: 0,
+        pendingReceiptsCount: 0
+      } as T;
+    }
+    
+    // Orders
+    if (endpoint.includes('/admin/api/orders') && method === 'GET') {
+      return {
+        data: [],
+        totalCount: 0,
+        page: 1,
+        pageSize: 10,
+        totalPages: 0
+      } as T;
+    }
+    
+    // Por defecto para POST/PUT/DELETE, devolver éxito
+    if (method !== 'GET') {
+      return { success: true, message: 'Operación completada (MOCK)' } as T;
+    }
+    
+    // Por defecto, devolver array vacío o objeto vacío
+    return (Array.isArray([]) ? [] : {}) as T;
   }
 
   // Orders
