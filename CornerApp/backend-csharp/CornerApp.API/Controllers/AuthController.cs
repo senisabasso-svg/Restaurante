@@ -282,33 +282,58 @@ public class AuthController : ControllerBase
             });
         }
 
-        // Login normal de admin - requiere restaurantId
-        if (!request.RestaurantId.HasValue || request.RestaurantId.Value <= 0)
+        // Login normal de admin
+        // Si no se envía RestaurantId, buscar automáticamente el restaurante del usuario
+        Admin? admin = null;
+        Restaurant? restaurant = null;
+        
+        if (request.RestaurantId.HasValue && request.RestaurantId.Value > 0)
         {
-            return BadRequest(new { error = "ID de restaurante es requerido para usuarios normales" });
+            // Si se envía RestaurantId, buscar por restaurantId y username
+            restaurant = await _context.Restaurants
+                .FirstOrDefaultAsync(r => r.Id == request.RestaurantId.Value && r.IsActive);
+
+            if (restaurant == null)
+            {
+                _logger.LogWarning("Intento de login admin fallido: Restaurante no encontrado o inactivo - RestaurantId: {RestaurantId}", request.RestaurantId);
+                return Unauthorized(new { error = "Restaurante no encontrado o inactivo" });
+            }
+
+            admin = await _context.Admins
+                .Include(a => a.Restaurant)
+                .FirstOrDefaultAsync(a => a.RestaurantId == request.RestaurantId.Value && 
+                                         a.Username.ToLower() == request.Username.ToLower());
         }
-
-        // Verificar que el restaurante existe y está activo
-        var restaurant = await _context.Restaurants
-            .FirstOrDefaultAsync(r => r.Id == request.RestaurantId.Value && r.IsActive);
-
-        if (restaurant == null)
+        else
         {
-            _logger.LogWarning("Intento de login admin fallido: Restaurante no encontrado o inactivo - RestaurantId: {RestaurantId}", request.RestaurantId);
-            return Unauthorized(new { error = "Restaurante no encontrado o inactivo" });
+            // Si no se envía RestaurantId, buscar solo por username y obtener su restaurante
+            admin = await _context.Admins
+                .Include(a => a.Restaurant)
+                .FirstOrDefaultAsync(a => a.Username.ToLower() == request.Username.ToLower());
+            
+            if (admin != null)
+            {
+                restaurant = admin.Restaurant;
+                if (restaurant != null && !restaurant.IsActive)
+                {
+                    _logger.LogWarning("Intento de login admin fallido: Restaurante inactivo - RestaurantId: {RestaurantId}", restaurant.Id);
+                    return Unauthorized(new { error = "Restaurante inactivo" });
+                }
+            }
         }
-
-        // Buscar admin por restaurantId y username (case-insensitive)
-        var admin = await _context.Admins
-            .Include(a => a.Restaurant)
-            .FirstOrDefaultAsync(a => a.RestaurantId == request.RestaurantId.Value && 
-                                     a.Username.ToLower() == request.Username.ToLower());
 
         if (admin == null)
         {
             _logger.LogWarning("Intento de login admin fallido: Usuario no encontrado - RestaurantId: {RestaurantId}, Username: {Username}", 
                 request.RestaurantId, request.Username);
             return Unauthorized(new { error = "Usuario o contraseña incorrectos" });
+        }
+
+        // Verificar que el restaurante existe
+        if (restaurant == null)
+        {
+            _logger.LogWarning("Intento de login admin fallido: Usuario sin restaurante asociado - Username: {Username}", request.Username);
+            return Unauthorized(new { error = "Usuario sin restaurante asociado" });
         }
 
         // Verificar contraseña
