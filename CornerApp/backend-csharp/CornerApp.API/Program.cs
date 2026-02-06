@@ -239,28 +239,24 @@ Log.Information("Environment: {Environment}", builder.Environment.EnvironmentNam
 Log.Information("IsProduction: {IsProduction}", builder.Environment.IsProduction());
 
 // En producción, usar PostgreSQL de Render directamente, NO leer de appsettings.json
+// IMPORTANTE: NO usar SecretsService en producción porque lee de appsettings.json (SQL Server)
 // Usar Environment.GetEnvironmentVariable para asegurar que solo lea de variables de entorno
 string? connectionString = null;
 if (builder.Environment.IsProduction())
 {
-    // 1. Intentar desde SecretsService
-    var secretConnectionString = Task.Run(async () => await secretsService.GetSecretAsync("ConnectionStrings:DefaultConnection")).Result;
-    Log.Information("SecretsService connection string: {HasValue}", secretConnectionString != null);
-    
-    // 2. Intentar desde variable de entorno (NO de appsettings.json)
+    // En producción, SOLO usar variable de entorno o fallback hardcodeado
+    // NO usar SecretsService porque lee de appsettings.json que tiene SQL Server
     var envConnectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
     Log.Information("Variable de entorno CONNECTION_STRING: {HasValue} (longitud: {Length})", 
         envConnectionString != null, envConnectionString?.Length ?? 0);
     
-    // 3. Usar fallback hardcodeado
-    connectionString = secretConnectionString 
-        ?? envConnectionString 
-        ?? "postgresql://cornerappdb_user:4WooAkinpyD01iTZFk7FAqFJJoNG07zS@dpg-d62kjuogjchc73bq48qg-a.virginia-postgres.render.com/cornerappdb";
+    // Usar variable de entorno o fallback hardcodeado (PostgreSQL)
+    connectionString = envConnectionString 
+        ?? "postgresql://cornerappdb_user:4WooAkinpyD01iTZFk7FAqFJJoNG07zS@dpg-d62kjuogjchc73bq48qg-a/cornerappdb";
     
     Log.Information("Connection String final seleccionado: {Source}", 
-        secretConnectionString != null ? "SecretsService" 
-        : envConnectionString != null ? "Environment Variable" 
-        : "Hardcoded Fallback");
+        envConnectionString != null ? "Environment Variable" 
+        : "Hardcoded Fallback (PostgreSQL)");
 }
 else
 {
