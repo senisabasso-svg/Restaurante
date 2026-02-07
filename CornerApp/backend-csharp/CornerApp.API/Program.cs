@@ -259,8 +259,8 @@ try
 {
     var builderTest = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
     Log.Information("Connection string validado correctamente. Server: {Server}, Database: {Database}, User ID: {UserId}", 
-        builderTest.DataSource ?? builderTest.Server, 
-        builderTest.InitialCatalog ?? builderTest.Database, 
+        builderTest.DataSource, 
+        builderTest.InitialCatalog, 
         builderTest.UserID);
 }
 catch (Exception ex)
@@ -1225,7 +1225,254 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Datos hardcodeados removidos - usar migraciones o seeders para datos iniciales
+// Inicializar datos hardcodeados para demostración en Render
+if (app.Environment.IsProduction())
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        try
+        {
+            Log.Information("🔧 Inicializando datos hardcodeados para demostración...");
+            
+            // 1. Crear restaurante con ID 12 si no existe
+            var restaurant = await dbContext.Restaurants.FindAsync(12);
+            if (restaurant == null)
+            {
+                restaurant = new Restaurant
+                {
+                    Id = 12,
+                    Name = "Corner Restaurant",
+                    Identifier = "corner",
+                    Address = "Av. Principal 123, Montevideo",
+                    Phone = "123456789",
+                    Email = "corner@cornerapp.com",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Restaurants.Add(restaurant);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Restaurante creado: ID 12, Name: Corner Restaurant");
+            }
+            
+            // 2. Crear usuario admin "corner" con password "password123" si no existe
+            var admin = await dbContext.Admins.FirstOrDefaultAsync(a => a.RestaurantId == 12 && a.Username == "corner");
+            if (admin == null)
+            {
+                var passwordHash = BCrypt.Net.BCrypt.HashPassword("password123");
+                admin = new Admin
+                {
+                    RestaurantId = 12,
+                    Username = "corner",
+                    Email = "corner@cornerapp.com",
+                    Name = "Corner Admin",
+                    PasswordHash = passwordHash,
+                    Role = "Admin",
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Admins.Add(admin);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Usuario admin creado: corner / password123");
+            }
+            
+            // 3. Crear categoría si no existe
+            var category = await dbContext.Categories.FirstOrDefaultAsync(c => c.RestaurantId == 12 && c.Name == "Bebidas");
+            if (category == null)
+            {
+                category = new Category
+                {
+                    RestaurantId = 12,
+                    Name = "Bebidas",
+                    Description = "Categoría de bebidas refrescantes",
+                    DisplayOrder = 1,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Categories.Add(category);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Categoría creada: Bebidas");
+            }
+            
+            // 4. Crear productos si no existen
+            var product1 = await dbContext.Products.FirstOrDefaultAsync(p => p.RestaurantId == 12 && p.Name == "Coca Cola");
+            if (product1 == null)
+            {
+                product1 = new Product
+                {
+                    RestaurantId = 12,
+                    Name = "Coca Cola",
+                    Description = "Bebida gaseosa refrescante",
+                    Price = 500,
+                    CategoryId = category.Id,
+                    DisplayOrder = 1,
+                    IsAvailable = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Products.Add(product1);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Producto creado: Coca Cola");
+            }
+            
+            var product2 = await dbContext.Products.FirstOrDefaultAsync(p => p.RestaurantId == 12 && p.Name == "Pizza Margarita");
+            if (product2 == null)
+            {
+                product2 = new Product
+                {
+                    RestaurantId = 12,
+                    Name = "Pizza Margarita",
+                    Description = "Pizza con tomate, mozzarella y albahaca",
+                    Price = 1200,
+                    CategoryId = category.Id,
+                    DisplayOrder = 2,
+                    IsAvailable = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Products.Add(product2);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Producto creado: Pizza Margarita");
+            }
+            
+            // 5. Crear subproductos si no existen
+            var subProduct1 = await dbContext.SubProducts.FirstOrDefaultAsync(sp => sp.ProductId == product1.Id && sp.Name == "Tamaño Grande");
+            if (subProduct1 == null)
+            {
+                subProduct1 = new SubProduct
+                {
+                    ProductId = product1.Id,
+                    Name = "Tamaño Grande",
+                    Description = "Vaso grande de 500ml",
+                    Price = 100,
+                    DisplayOrder = 1,
+                    IsAvailable = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.SubProducts.Add(subProduct1);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Subproducto creado: Tamaño Grande");
+            }
+            
+            var subProduct2 = await dbContext.SubProducts.FirstOrDefaultAsync(sp => sp.ProductId == product1.Id && sp.Name == "Tamaño Mediano");
+            if (subProduct2 == null)
+            {
+                subProduct2 = new SubProduct
+                {
+                    ProductId = product1.Id,
+                    Name = "Tamaño Mediano",
+                    Description = "Vaso mediano de 350ml",
+                    Price = 50,
+                    DisplayOrder = 2,
+                    IsAvailable = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.SubProducts.Add(subProduct2);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Subproducto creado: Tamaño Mediano");
+            }
+            
+            // 6. Crear repartidor si no existe
+            var deliveryPerson = await dbContext.DeliveryPersons.FirstOrDefaultAsync(d => d.Username == "juan_delivery");
+            if (deliveryPerson == null)
+            {
+                var deliveryPasswordHash = BCrypt.Net.BCrypt.HashPassword("delivery123");
+                deliveryPerson = new DeliveryPerson
+                {
+                    Name = "Juan Pérez",
+                    Phone = "0987654321",
+                    Email = "juan.perez@cornerapp.com",
+                    Username = "juan_delivery",
+                    PasswordHash = deliveryPasswordHash,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.DeliveryPersons.Add(deliveryPerson);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Repartidor creado: Juan Pérez (juan_delivery / delivery123)");
+            }
+            
+            // 7. Crear espacio si no existe
+            var space = await dbContext.Spaces.FirstOrDefaultAsync(s => s.RestaurantId == 12 && s.Name == "Sala Principal");
+            if (space == null)
+            {
+                space = new Space
+                {
+                    RestaurantId = 12,
+                    Name = "Sala Principal",
+                    Description = "Área principal del restaurante",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Spaces.Add(space);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Espacio creado: Sala Principal");
+            }
+            
+            // 8. Crear mesas si no existen
+            var table1 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 12 && t.Number == "1");
+            if (table1 == null)
+            {
+                table1 = new Table
+                {
+                    RestaurantId = 12,
+                    Number = "1",
+                    Capacity = 4,
+                    Location = "Frente",
+                    Status = "Available",
+                    SpaceId = space.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Tables.Add(table1);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Mesa creada: Mesa 1");
+            }
+            
+            var table2 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 12 && t.Number == "2");
+            if (table2 == null)
+            {
+                table2 = new Table
+                {
+                    RestaurantId = 12,
+                    Number = "2",
+                    Capacity = 2,
+                    Location = "Fondo",
+                    Status = "Available",
+                    SpaceId = space.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Tables.Add(table2);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Mesa creado: Mesa 2");
+            }
+            
+            var table3 = await dbContext.Tables.FirstOrDefaultAsync(t => t.RestaurantId == 12 && t.Number == "3");
+            if (table3 == null)
+            {
+                table3 = new Table
+                {
+                    RestaurantId = 12,
+                    Number = "3",
+                    Capacity = 6,
+                    Location = "Terraza",
+                    Status = "Available",
+                    SpaceId = space.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.Tables.Add(table3);
+                await dbContext.SaveChangesAsync();
+                Log.Information("✅ Mesa creada: Mesa 3");
+            }
+            
+            Log.Information("🎉 Datos hardcodeados inicializados exitosamente para demostración.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "❌ Error al inicializar datos hardcodeados: {Message}", ex.Message);
+            // No lanzar excepción, solo loguear el error para que la app pueda iniciar
+        }
+    }
+}
 
 // Limpiar espacios en blanco de usernames y emails de repartidores (solo en desarrollo)
 if (app.Environment.IsDevelopment())
