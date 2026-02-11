@@ -14,7 +14,7 @@ namespace CornerApp.API.Controllers;
 [ApiController]
 [Route("admin/api/cash-register")]
 [Tags("Administración - Caja")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Admin,Employee")] // Admin y Employee pueden acceder (métodos individuales pueden restringir más)
 public class CashRegisterController : ControllerBase
 {
     private readonly ApplicationDbContext _context;

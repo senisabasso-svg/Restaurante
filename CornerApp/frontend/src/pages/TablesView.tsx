@@ -1244,7 +1244,7 @@ export default function TablesViewPage() {
                 
                 try {
                   // Enviar reverso automáticamente cuando código 12 Y remainingExpirationTime <= 0
-                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime, undefined, amount);
                   
                   if (reverseResult.success) {
                     console.log('✅ [TablesView] Reverso enviado exitosamente');
@@ -1319,7 +1319,7 @@ export default function TablesViewPage() {
                 setPosStatusMessage(`⚠️ ${fullMessage} - Tiempo agotado. Enviando reverso...`);
                 
                 try {
-                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime, undefined, amount);
                   
                   if (reverseResult.success) {
                     console.log('✅ [TablesView] Reverso enviado exitosamente');
@@ -1347,7 +1347,7 @@ export default function TablesViewPage() {
                 // Enviar reverso cuando se alcanza el máximo de intentos sin respuesta
                 try {
                   setPosStatusMessage('Tiempo agotado. Enviando reverso...');
-                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime, undefined, amount);
                   
                   if (reverseResult.success) {
                     showToast('Transacción sin respuesta después de múltiples intentos. Reverso enviado automáticamente.', 'warning');
@@ -1379,7 +1379,7 @@ export default function TablesViewPage() {
                 // Enviar reverso cuando se alcanza el máximo de intentos sin respuesta
                 try {
                   setPosStatusMessage('Tiempo agotado. Enviando reverso...');
-                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                  const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime, undefined, amount);
                   
                   if (reverseResult.success) {
                     showToast('Transacción sin respuesta después de múltiples intentos. Reverso enviado automáticamente.', 'warning');
@@ -1407,7 +1407,7 @@ export default function TablesViewPage() {
               
               try {
                 setPosStatusMessage('Error de conexión. Enviando reverso...');
-                const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime);
+                const reverseResult = await api.sendPOSReverse(transactionId, transactionDateTime, undefined, amount);
                 
                 if (reverseResult.success) {
                   showToast('Error de conexión con el POS. Reverso enviado automáticamente para anular la transacción.', 'warning');

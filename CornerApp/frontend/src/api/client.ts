@@ -475,12 +475,13 @@ class ApiClient {
     return response;
   }
 
-  async sendPOSReverse(transactionId?: number | string, transactionDateTime?: string, orderId?: number) {
+  async sendPOSReverse(transactionId?: number | string, transactionDateTime?: string, orderId?: number, amount?: number) {
     const requestBody: { 
       transactionId?: number; 
       sTransactionId?: string; 
       transactionDateTime?: string;
       orderId?: number;
+      amount?: number;
     } = {};
     
     if (orderId) {
@@ -500,6 +501,11 @@ class ApiClient {
       if (transactionDateTime) {
         requestBody.transactionDateTime = transactionDateTime;
       }
+    }
+    
+    // Siempre incluir el monto si se proporciona
+    if (amount !== undefined && amount > 0) {
+      requestBody.amount = amount;
     }
 
     console.log('═══════════════════════════════════════════════════════════');

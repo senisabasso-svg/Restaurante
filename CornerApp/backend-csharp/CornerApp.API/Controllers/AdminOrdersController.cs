@@ -2239,7 +2239,7 @@ public class AdminOrdersController : ControllerBase
 
             if (request.TransactionId.HasValue || !string.IsNullOrWhiteSpace(request.STransactionId))
             {
-                transactionId = request.TransactionId ?? (long.TryParse(request.STransactionId, out var parsed) ? parsed : null);
+                transactionId = request.TransactionId ?? (long.TryParse(request.STransactionId, out var parsedId) ? parsedId : null);
                 sTransactionId = request.STransactionId ?? request.TransactionId?.ToString();
                 transactionDateTime = request.TransactionDateTime;
             }
@@ -2353,9 +2353,47 @@ public class AdminOrdersController : ControllerBase
             }
 
             // Obtener monto del pedido original
-            decimal amount = request.Amount.HasValue ? request.Amount.Value : (originalOrder?.Total ?? 0);
+            // PRIORIDAD 1: Usar el Amount proporcionado en el request
+            // PRIORIDAD 2: Si no se proporciona Amount, intentar obtenerlo del pedido original
+            // PRIORIDAD 3: Si no hay pedido original pero hay TransactionId, buscar el pedido por TransactionId
+            decimal amount = 0;
+            
+            if (request.Amount.HasValue && request.Amount.Value > 0)
+            {
+                amount = request.Amount.Value;
+                _logger.LogInformation("Usando Amount proporcionado en el request: {Amount}", amount);
+            }
+            else if (originalOrder != null && originalOrder.Total > 0)
+            {
+                amount = originalOrder.Total;
+                _logger.LogInformation("Usando Total del pedido {OrderId}: {Amount}", originalOrder.Id, amount);
+            }
+            else if (transactionId != null || !string.IsNullOrWhiteSpace(sTransactionId))
+            {
+                // Intentar buscar el pedido por TransactionId si aún no lo tenemos
+                if (originalOrder == null)
+                {
+                    var searchTransactionId = transactionId?.ToString() ?? sTransactionId;
+                    var foundOrder = await _context.Orders
+                        .FirstOrDefaultAsync(o => o.RestaurantId == restaurantId &&
+                            ((o.POSTransactionId != null && o.POSTransactionId.ToString() == searchTransactionId) ||
+                             (o.POSTransactionIdString != null && o.POSTransactionIdString == searchTransactionId)));
+                    
+                    if (foundOrder != null && foundOrder.Total > 0)
+                    {
+                        originalOrder = foundOrder;
+                        amount = foundOrder.Total;
+                        _logger.LogInformation("Pedido encontrado por TransactionId {TransactionId}, usando Total: {Amount}", searchTransactionId, amount);
+                    }
+                }
+            }
+            
+            // Validar que el monto sea mayor a 0
             if (amount <= 0)
             {
+                var transactionIdStr = transactionId?.ToString() ?? sTransactionId ?? "N/A";
+                _logger.LogError("No se pudo determinar el monto para el reverso. Amount en request: {RequestAmount}, OrderId: {OrderId}, TransactionId: {TransactionId}", 
+                    request.Amount, request.OrderId, transactionIdStr);
                 return BadRequest(new { error = "El monto debe ser mayor a 0. Proporcione Amount o OrderId con un pedido válido." });
             }
 
@@ -2418,27 +2456,21 @@ public class AdminOrdersController : ControllerBase
             var posConfig = await GetPOSConfigAsync();
 
             // Crear el JSON con el formato exacto requerido para reverso
-            // Orden según el formato especificado
+            // Formato simple: solo campos básicos + TransactionId de la transacción original
+            // Usar TransactionDateTime de la transacción original (no la fecha del reverso)
+            var finalTransactionDateTime = transactionDateTime ?? reverseTransactionDateTime;
+            var finalTransactionId = transactionId ?? (long.TryParse(sTransactionId, out var parsedTransactionId) ? parsedTransactionId : 0);
+            var finalSTransactionId = sTransactionId ?? transactionId?.ToString() ?? "";
+            
             var jsonContent = $@"{{
   ""PosID"": ""{posConfig.PosId}"",
   ""SystemId"": ""{posConfig.SystemId}"",
   ""Branch"": ""{posConfig.Branch}"",
   ""ClientAppId"": ""{posConfig.ClientAppId}"",
   ""UserId"": ""1"",
-  ""TransactionDateTimeyyyyMMddHHmmssSSS"": ""{reverseTransactionDateTime}"",
-  ""OriginalTransactionDateyyMMdd"": ""{originalTransactionDate}"",
-  ""Amount"": ""{amountFormatted}"",
-  ""Currency"": ""858"",
-  ""Quotas"": 1,
-  ""Plan"": 0,
-  ""TaxableAmount"": ""{taxableAmount}"",
-  ""TaxRefund"": 1,
-  ""InvoiceAmount"": ""{invoiceAmount}"",
-  ""CiNoCheckDigict"": ""{request.CiNoCheckDigict ?? ""}"",
-  ""Merchant"": ""{request.Merchant ?? posConfig.PosId}"",
-  ""NeedToReadCard"": {request.NeedToReadCard.ToString().ToLower()},
-  ""TaxAmount"": ""{taxAmount}"",
-  ""TicketNumber"": ""{ticketNumber}""
+  ""TransactionDateTimeyyyyMMddHHmmssSSS"": ""{finalTransactionDateTime}"",
+  ""TransactionId"": {finalTransactionId},
+  ""STransactionId"": ""{finalSTransactionId}""
 }}";
             
             // Log detallado en consola del JSON que se envía al ITD
