@@ -2095,13 +2095,35 @@ export default function ReportsPage() {
 
                   setIsProcessingCancel(true);
                   try {
+                    // Validar que se haya ingresado el ticket number
+                    if (!cancelTicketNumberInput.trim()) {
+                      showToast('Por favor ingrese el número de ticket para la anulación', 'error');
+                      setIsProcessingCancel(false);
+                      return;
+                    }
+
+                    // Validar que el monto sea mayor a 0
+                    if (!selectedOrderForCancel.total || selectedOrderForCancel.total <= 0) {
+                      showToast('El monto debe ser mayor a 0 para enviar la anulación', 'error');
+                      setIsProcessingCancel(false);
+                      return;
+                    }
+
                     // Si hay múltiples pedidos agrupados, usar el primero para obtener la información
                     const firstOrder = selectedOrderForCancel.orders && selectedOrderForCancel.orders.length > 0 
                       ? selectedOrderForCancel.orders[0] 
                       : selectedOrderForCancel;
                     const orderCount = selectedOrderForCancel.orders ? selectedOrderForCancel.orders.length : 1;
 
+                    console.log('🚫 [Reports] Enviando anulación POS:', {
+                      amount: selectedOrderForCancel.total,
+                      orderId: firstOrder.id,
+                      ticketNumber: cancelTicketNumberInput.trim(),
+                      transactionDateTime: selectedOrderForCancel.posTransactionDateTime || firstOrder.posTransactionDateTime
+                    });
+
                     // Enviar anulación con el monto total y ticketNumber ingresado
+                    // IMPORTANTE: Siempre enviar la anulación, no la devolución
                     const result = await api.sendPOSCancel(
                       selectedOrderForCancel.total,
                       selectedOrderForCancel.posTransactionDateTime || firstOrder.posTransactionDateTime,

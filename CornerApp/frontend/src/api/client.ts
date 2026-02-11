@@ -379,6 +379,12 @@ class ApiClient {
     merchant?: string,
     needToReadCard?: boolean
   ) {
+    // Validar que el monto sea mayor a 0
+    if (!amount || amount <= 0) {
+      console.error('❌ [POS CANCEL FRONTEND] Error: El monto debe ser mayor a 0');
+      throw new Error('El monto debe ser mayor a 0 para enviar la anulación');
+    }
+
     const requestBody = { 
       amount,
       originalTransactionDateTime,
@@ -394,9 +400,12 @@ class ApiClient {
     };
 
     console.log('═══════════════════════════════════════════════════════════');
-    console.log('📤 [POS CANCEL FRONTEND] Enviando anulación al backend');
+    console.log('🚫 [POS CANCEL FRONTEND] Enviando ANULACIÓN al backend');
     console.log('═══════════════════════════════════════════════════════════');
-    console.log('Endpoint: /admin/api/pos/cancel');
+    console.log('Endpoint: /admin/api/pos/cancel (ANULACIÓN - diferente de devolución)');
+    console.log('Monto:', amount);
+    console.log('OrderId:', orderId);
+    console.log('TicketNumber:', ticketNumber);
     console.log('JSON enviado al backend:', JSON.stringify(requestBody, null, 2));
     console.log('═══════════════════════════════════════════════════════════');
 

@@ -41,7 +41,8 @@ public class AdminOrdersController : ControllerBase
     
     // URLs del POS (constantes)
     private const string POS_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchase";
-    private const string POS_VOID_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchaseRefund";
+    private const string POS_VOID_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchaseRefund"; // DEVOLUCIÓN (refund)
+    private const string POS_CANCEL_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchaseVoidByTicket"; // ANULACIÓN (void by ticket)
     private const string POS_QUERY_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialPurchaseQuery";
     private const string POS_REVERSE_API_URL = "https://poslink.hm.opos.com.uy/itdServer/processFinancialReverse";
     
@@ -1335,7 +1336,7 @@ public class AdminOrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Envía una anulación al POS externo (usa processFinancialPurchaseRefund con campos adicionales)
+    /// Envía una anulación al POS externo (usa processFinancialPurchaseVoidByTicket)
     /// </summary>
     [HttpPost("pos/cancel")]
     public async Task<ActionResult> SendPOSCancel([FromBody] POSCancelRequest request)
@@ -1527,16 +1528,32 @@ public class AdminOrdersController : ControllerBase
   ""TicketNumber"": ""{ticketNumber}""
 }}";
 
-            _logger.LogInformation("Enviando anulación POS. JSON: {Json}", jsonContent);
+            _logger.LogInformation("🚫 [POS CANCEL] Enviando anulación POS. Monto: {Amount}, OrderId: {OrderId}, URL: {Url}", 
+                request.Amount, request.OrderId, POS_CANCEL_API_URL);
+            _logger.LogInformation("🚫 [POS CANCEL] JSON de anulación: {Json}", jsonContent);
             
             // Log detallado en consola del JSON que se envía al ITD
             Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine("📤 [POS CANCEL BACKEND] Enviando anulación al ITD");
+            Console.WriteLine("🚫 [POS CANCEL BACKEND] Enviando ANULACIÓN al ITD");
             Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine($"URL destino: {POS_VOID_API_URL}");
+            Console.WriteLine($"URL destino (ANULACIÓN): {POS_CANCEL_API_URL}");
+            Console.WriteLine($"NOTA: Este es el endpoint de ANULACIÓN (void by ticket) - diferente de devolución (refund)");
             Console.WriteLine("JSON enviado al ITD:");
             Console.WriteLine(jsonContent);
             Console.WriteLine("═══════════════════════════════════════════════════════════");
+
+            // Validar que todos los datos necesarios estén presentes antes de enviar
+            if (string.IsNullOrWhiteSpace(ticketNumber))
+            {
+                _logger.LogError("🚫 [POS CANCEL] Error: TicketNumber es requerido para anulación");
+                return BadRequest(new { error = "TicketNumber es requerido para anulación" });
+            }
+
+            if (request.Amount <= 0)
+            {
+                _logger.LogError("🚫 [POS CANCEL] Error: El monto debe ser mayor a 0");
+                return BadRequest(new { error = "El monto debe ser mayor a 0" });
+            }
 
             var httpClient = _httpClientFactory.CreateClient();
             httpClient.Timeout = TimeSpan.FromSeconds(30);
@@ -1547,12 +1564,15 @@ public class AdminOrdersController : ControllerBase
                 CharSet = "UTF-8"
             };
 
-            var response = await httpClient.PostAsync(POS_VOID_API_URL, content);
+            // Asegurar que siempre se envíe la anulación al endpoint correcto
+            _logger.LogInformation("🚫 [POS CANCEL] Enviando POST a {Url}", POS_CANCEL_API_URL);
+            var response = await httpClient.PostAsync(POS_CANCEL_API_URL, content);
             var responseContent = await response.Content.ReadAsStringAsync();
             
             // Log de la respuesta del ITD
+            _logger.LogInformation("🚫 [POS CANCEL] Respuesta recibida del ITD. Status: {Status}", response.StatusCode);
             Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine("📥 [POS CANCEL BACKEND] Respuesta recibida del ITD");
+            Console.WriteLine("📥 [POS CANCEL BACKEND] Respuesta recibida del ITD (ANULACIÓN)");
             Console.WriteLine("═══════════════════════════════════════════════════════════");
             Console.WriteLine($"Status Code: {response.StatusCode}");
             Console.WriteLine("Respuesta del ITD:");
@@ -1660,7 +1680,7 @@ public class AdminOrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Envía una devolución (void) al POS externo
+    /// Envía una devolución al POS externo (usa processFinancialPurchaseRefund)
     /// </summary>
     [HttpPost("pos/void")]
     public async Task<ActionResult> SendPOSVoid([FromBody] POSVoidRequest request)
