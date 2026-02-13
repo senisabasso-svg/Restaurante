@@ -462,26 +462,50 @@ export default function ReportsPage() {
     try {
       setLoading(true);
       const [revenue, products, statistics, paymentRevenue, comp, hours, delivery, cashRegisters] = await Promise.all([
-        api.getRevenueReport(period),
-        api.getTopProducts(period, 10),
-        api.getReportStats(period),
-        api.getRevenueByPaymentMethod(period),
-        api.getComparison(period),
-        api.getPeakHours(period),
-        api.getDeliveryPerformance(period),
-        api.getCashRegistersReport(period),
+        api.getRevenueReport(period).catch(err => {
+          console.error('Error loading revenue:', err);
+          return null;
+        }),
+        api.getTopProducts(period, 10).catch(err => {
+          console.error('Error loading top products:', err);
+          return [];
+        }),
+        api.getReportStats(period).catch(err => {
+          console.error('Error loading stats:', err);
+          return null;
+        }),
+        api.getRevenueByPaymentMethod(period).catch(err => {
+          console.error('Error loading payment revenue:', err);
+          return [];
+        }),
+        api.getComparison(period).catch(err => {
+          console.error('Error loading comparison:', err);
+          return null;
+        }),
+        api.getPeakHours(period).catch(err => {
+          console.error('Error loading peak hours:', err);
+          return null;
+        }),
+        api.getDeliveryPerformance(period).catch(err => {
+          console.error('Error loading delivery performance:', err);
+          return [];
+        }),
+        api.getCashRegistersReport(period).catch(err => {
+          console.error('Error loading cash registers:', err);
+          return null;
+        }),
       ]);
       setRevenueData(revenue);
-      setTopProducts(products);
+      setTopProducts(Array.isArray(products) ? products : []);
       setStats(statistics);
-      setRevenueByPayment(paymentRevenue);
+      setRevenueByPayment(Array.isArray(paymentRevenue) ? paymentRevenue : []);
       setComparison(comp);
       setPeakHours(hours);
-      setDeliveryPerformance(delivery);
+      setDeliveryPerformance(Array.isArray(delivery) ? delivery : []);
       setCashRegistersReport(cashRegisters);
     } catch (error) {
       showToast('Error al cargar los reportes', 'error');
-      console.error(error);
+      console.error('Error general al cargar reportes:', error);
     } finally {
       setLoading(false);
     }
@@ -807,7 +831,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Comparativa cards */}
-      {comparison && (
+      {comparison ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-center justify-between mb-2">
@@ -855,6 +879,41 @@ export default function ReportsPage() {
             <p className="text-xs text-gray-400 mt-1">
               vs {formatCurrency(comparison.previous.averageOrder)} anterior
             </p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <DollarSign size={20} className="text-green-600" />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-1">Ingresos</p>
+            <p className="text-2xl font-bold text-gray-800">$0</p>
+            <p className="text-xs text-gray-400 mt-1">Sin datos disponibles</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <ShoppingCart size={20} className="text-blue-600" />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-1">Pedidos</p>
+            <p className="text-2xl font-bold text-gray-800">0</p>
+            <p className="text-xs text-gray-400 mt-1">Sin datos disponibles</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <TrendingUp size={20} className="text-purple-600" />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-1">Ticket Promedio</p>
+            <p className="text-2xl font-bold text-gray-800">$0</p>
+            <p className="text-xs text-gray-400 mt-1">Sin datos disponibles</p>
           </div>
         </div>
       )}
@@ -1184,31 +1243,29 @@ export default function ReportsPage() {
       )}
 
       {/* Resumen de estados */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl shadow-md p-4 text-center">
-            <div className="text-3xl font-bold text-gray-800">{stats.totalOrders}</div>
-            <div className="text-sm text-gray-500">Total Pedidos</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-4 text-center">
-            <div className="text-3xl font-bold text-green-600">{stats.completedOrders}</div>
-            <div className="text-sm text-gray-500">Completados</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-4 text-center">
-            <div className="text-3xl font-bold text-red-600">{stats.cancelledOrders}</div>
-            <div className="text-sm text-gray-500">Cancelados</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-md p-4 text-center">
-            <div className={`text-3xl font-bold ${
-              stats.completionRate >= 80 ? 'text-green-600' : 
-              stats.completionRate >= 60 ? 'text-yellow-600' : 'text-red-600'
-            }`}>
-              {stats.completionRate.toFixed(1)}%
-            </div>
-            <div className="text-sm text-gray-500">Tasa de Éxito</div>
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl shadow-md p-4 text-center">
+          <div className="text-3xl font-bold text-gray-800">{stats?.totalOrders ?? 0}</div>
+          <div className="text-sm text-gray-500">Total Pedidos</div>
         </div>
-      )}
+        <div className="bg-white rounded-xl shadow-md p-4 text-center">
+          <div className="text-3xl font-bold text-green-600">{stats?.completedOrders ?? 0}</div>
+          <div className="text-sm text-gray-500">Completados</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-md p-4 text-center">
+          <div className="text-3xl font-bold text-red-600">{stats?.cancelledOrders ?? 0}</div>
+          <div className="text-sm text-gray-500">Cancelados</div>
+        </div>
+        <div className="bg-white rounded-xl shadow-md p-4 text-center">
+          <div className={`text-3xl font-bold ${
+            (stats?.completionRate ?? 0) >= 80 ? 'text-green-600' : 
+            (stats?.completionRate ?? 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+          }`}>
+            {(stats?.completionRate ?? 0).toFixed(1)}%
+          </div>
+          <div className="text-sm text-gray-500">Tasa de Éxito</div>
+        </div>
+      </div>
 
       {/* Modal de Movimientos de Caja */}
       <Modal

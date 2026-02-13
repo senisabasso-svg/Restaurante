@@ -259,7 +259,8 @@ class ApiClient {
       sTransactionId?: string; 
       transactionDateTime?: string; 
       response?: string 
-    }
+    },
+    receiptImage?: string
   ) {
     // Primero actualizar el método de pago del pedido
     const paymentMethodBody: any = { paymentMethod };
@@ -270,6 +271,13 @@ class ApiClient {
       paymentMethodBody.POSTransactionIdString = posInfo.sTransactionId;
       paymentMethodBody.POSTransactionDateTime = posInfo.transactionDateTime;
       paymentMethodBody.POSResponse = posInfo.response;
+    }
+    
+    // Si es transferencia y hay comprobante, incluirla
+    if ((paymentMethod.toLowerCase().includes('transfer') || 
+         paymentMethod.toLowerCase().includes('transferencia')) && 
+        receiptImage) {
+      paymentMethodBody.ReceiptImage = receiptImage;
     }
     
     await this.request<Order>(`/admin/api/orders/${orderId}/payment-method`, {

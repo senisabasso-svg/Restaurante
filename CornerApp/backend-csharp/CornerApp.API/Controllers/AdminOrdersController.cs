@@ -982,6 +982,26 @@ public class AdminOrdersController : ControllerBase
                     id, request.POSTransactionId ?? (long.TryParse(request.POSTransactionIdString, out var parsed) ? parsed : 0));
             }
 
+            // Si es pago por transferencia, guardar el comprobante si se proporciona
+            if ((paymentMethod.Name.ToLower() == PaymentConstants.METHOD_TRANSFER.ToLower() || 
+                 paymentMethod.Name.ToLower().Contains("transfer")) && 
+                !string.IsNullOrWhiteSpace(request.ReceiptImage))
+            {
+                // Validar el comprobante
+                var (isValid, errorMessage) = FileValidationHelper.ValidateReceiptImage(
+                    request.ReceiptImage, 
+                    AppConstants.MAX_PRODUCT_IMAGE_SIZE_BYTES
+                );
+
+                if (!isValid)
+                {
+                    return BadRequest(new { error = $"Comprobante inválido: {errorMessage}" });
+                }
+
+                order.TransferReceiptImage = request.ReceiptImage;
+                _logger.LogInformation("Comprobante de transferencia guardado para pedido {OrderId}", id);
+            }
+
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Método de pago del pedido {OrderId} actualizado a: {PaymentMethod}", id, paymentMethod.Name);
@@ -2661,6 +2681,8 @@ public class UpdateOrderPaymentMethodRequest
     public string? POSTransactionIdString { get; set; }
     public string? POSTransactionDateTime { get; set; }
     public string? POSResponse { get; set; }
+    // Comprobante de transferencia (base64, opcional, solo para pagos por transferencia)
+    public string? ReceiptImage { get; set; }
 }
 
 public class POSTransactionRequest
