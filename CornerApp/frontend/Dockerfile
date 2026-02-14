@@ -7,14 +7,25 @@ WORKDIR /app
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
-# Copiar archivos de dependencias
-COPY package*.json ./
+# Copiar todo el contexto primero para detectar la estructura
+COPY . /tmp/context
+
+# Detectar y copiar archivos desde la ubicación correcta
+RUN if [ -f /tmp/context/CornerApp/frontend/package.json ]; then \
+      cp -r /tmp/context/CornerApp/frontend/* . && \
+      cp /tmp/context/CornerApp/frontend/package*.json .; \
+    elif [ -f /tmp/context/frontend/package.json ]; then \
+      cp -r /tmp/context/frontend/* . && \
+      cp /tmp/context/frontend/package*.json .; \
+    elif [ -f /tmp/context/package.json ]; then \
+      cp -r /tmp/context/* .; \
+    else \
+      echo "Error: No se encontró package.json" && exit 1; \
+    fi && \
+    rm -rf /tmp/context
 
 # Instalar dependencias
 RUN npm install
-
-# Copiar código fuente (incluyendo nginx.conf)
-COPY . .
 
 # Build de la aplicación
 RUN npm run build
