@@ -52,6 +52,22 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "La dirección es requerida" });
         }
 
+        // Validar RestaurantId
+        if (request.RestaurantId <= 0)
+        {
+            return BadRequest(new { error = "El ID del restaurante es requerido" });
+        }
+
+        // Verificar que el restaurante existe y está activo
+        var restaurant = await _context.Restaurants
+            .FirstOrDefaultAsync(r => r.Id == request.RestaurantId && r.IsActive);
+
+        if (restaurant == null)
+        {
+            _logger.LogWarning("Intento de registro de cliente con restaurante inexistente o inactivo - RestaurantId: {RestaurantId}", request.RestaurantId);
+            return BadRequest(new { error = "Restaurante no encontrado o inactivo" });
+        }
+
         // Verificar si el email ya existe (case-insensitive)
         var emailLower = request.Email.ToLower();
         var existingCustomer = await _context.Customers
@@ -73,6 +89,7 @@ public class AuthController : ControllerBase
             Phone = request.Phone ?? string.Empty,
             DefaultAddress = request.DefaultAddress,
             PasswordHash = passwordHash,
+            RestaurantId = request.RestaurantId,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -92,7 +109,8 @@ public class AuthController : ControllerBase
                 email = customer.Email,
                 phone = customer.Phone,
                 defaultAddress = customer.DefaultAddress,
-                points = customer.Points
+                points = customer.Points,
+                restaurantId = customer.RestaurantId
             }
         });
     }
@@ -120,6 +138,24 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(customer.PasswordHash))
         {
             return Unauthorized(new { error = "Este usuario no tiene contraseña configurada. Por favor, regístrate nuevamente." });
+        }
+
+        // Validar que el cliente tenga un RestaurantId válido
+        if (!customer.RestaurantId.HasValue || customer.RestaurantId.Value <= 0)
+        {
+            _logger.LogWarning("Intento de login de cliente sin RestaurantId: {Email}", request.Email);
+            return Unauthorized(new { error = "Tu cuenta no está asociada a un restaurante. Por favor, contacta al soporte." });
+        }
+
+        // Verificar que el restaurante existe y está activo
+        var restaurant = await _context.Restaurants
+            .FirstOrDefaultAsync(r => r.Id == customer.RestaurantId.Value && r.IsActive);
+
+        if (restaurant == null)
+        {
+            _logger.LogWarning("Intento de login de cliente con restaurante inexistente o inactivo - CustomerId: {CustomerId}, RestaurantId: {RestaurantId}", 
+                customer.Id, customer.RestaurantId);
+            return Unauthorized(new { error = "El restaurante asociado a tu cuenta no está disponible. Por favor, contacta al soporte." });
         }
 
         // Verificar contraseña
@@ -150,7 +186,8 @@ public class AuthController : ControllerBase
                 email = customer.Email,
                 phone = customer.Phone,
                 defaultAddress = customer.DefaultAddress,
-                points = customer.Points
+                points = customer.Points,
+                restaurantId = customer.RestaurantId
             }
         });
     }
@@ -373,12 +410,18 @@ public class AuthController : ControllerBase
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
             new Claim(ClaimTypes.Email, customer.Email),
             new Claim(ClaimTypes.Name, customer.Name)
         };
+
+        // Agregar RestaurantId al token si está disponible
+        if (customer.RestaurantId.HasValue)
+        {
+            claims.Add(new Claim("RestaurantId", customer.RestaurantId.Value.ToString()));
+        }
 
         var token = new JwtSecurityToken(
             issuer: jwtIssuer,

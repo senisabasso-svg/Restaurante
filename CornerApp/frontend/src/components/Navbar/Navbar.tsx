@@ -18,6 +18,7 @@ import {
   Table as TableIcon,
   Shield,
   MoreHorizontal,
+  Store,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -63,7 +64,7 @@ export default function Navbar() {
       icon: Settings,
       subItems: [
         //{ path: '/admin/tables', label: 'Mesas', icon: TableIcon },
-        // { path: '/admin/settings/business', label: 'Datos del Negocio', icon: Store }, // Temporalmente deshabilitado
+        { path: '/admin/settings/business', label: 'Datos del Negocio', icon: Store },
         // { path: '/admin/settings/delivery-zones', label: 'Zonas de Entrega', icon: MapPin }, // Temporalmente deshabilitado
         { path: '/admin/products', label: t('nav.products'), icon: Package },
         { path: '/admin/delivery-persons', label: t('nav.deliveryPersons'), icon: Truck },

@@ -10,6 +10,7 @@ public class RegisterRequest
     public string Password { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public string? DefaultAddress { get; set; }
+    public int RestaurantId { get; set; } // ID del restaurante al que pertenece el cliente
 }
 
 /// <summary>

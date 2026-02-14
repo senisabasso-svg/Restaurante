@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   Eye,
   CheckCircle2,
-  X
+  X,
+  CreditCard,
+  DollarSign
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useToast } from '../components/Toast/ToastContext';
@@ -68,18 +70,8 @@ export default function ActiveOrdersPage() {
 
   const [searchParams] = useSearchParams();
 
-  // Detectar si el usuario es repartidor
-  // Solo es repartidor si tiene delivery_token PERO NO tiene admin_token (admin/employee)
-  const hasDeliveryToken = !!localStorage.getItem('delivery_token');
-  const hasAdminToken = !!localStorage.getItem('admin_token');
-  const isDeliveryPerson = hasDeliveryToken && !hasAdminToken;
-
   // Determinar el tipo de filtro según la ruta
-  // Si es repartidor, solo puede ver delivery (nunca salon)
-  const orderType = isDeliveryPerson ? 'delivery' :
-                    location.pathname.includes('/salon') ? 'salon' : 
-                    location.pathname.includes('/delivery') ? 'delivery' : 
-                    'all';
+  const orderType = location.pathname.includes('/salon') ? 'salon' : 'all';
 
   // Inicializar filtros desde la URL
   useEffect(() => {
@@ -95,6 +87,15 @@ export default function ActiveOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: string; order: Order } | null>(null);
   const [selectedDeliveryPersonId, setSelectedDeliveryPersonId] = useState<number | null>(null);
+  
+  // Payment modal states
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [orderForPayment, setOrderForPayment] = useState<Order | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<Array<{ id: number; name: string; displayName?: string }>>([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [receiptImagePreview, setReceiptImagePreview] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const { showToast } = useToast();
   const { playSound } = useNotificationSound();
@@ -681,6 +682,80 @@ export default function ActiveOrdersPage() {
     }
   };
 
+  // Load payment methods
+  const loadPaymentMethods = async () => {
+    try {
+      const methods = await api.getPaymentMethods();
+      setPaymentMethods(methods);
+      if (methods.length > 0 && !selectedPaymentMethod) {
+        setSelectedPaymentMethod(methods[0].name);
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error al cargar métodos de pago';
+      showToast(errorMessage, 'error');
+    }
+  };
+
+  // Open payment modal
+  const openPaymentModal = (order: Order) => {
+    setOrderForPayment(order);
+    setSelectedPaymentMethod(order.paymentMethod || '');
+    setReceiptImage(null);
+    setReceiptImagePreview(null);
+    loadPaymentMethods();
+    setIsPaymentModalOpen(true);
+  };
+
+  // Process payment
+  const handleProcessPayment = async () => {
+    if (!orderForPayment) {
+      return;
+    }
+
+    if (!selectedPaymentMethod) {
+      showToast('Selecciona un método de pago', 'error');
+      return;
+    }
+
+    // Validate receipt for transfer payments
+    const isTransfer = selectedPaymentMethod.toLowerCase().includes('transfer') || 
+                       selectedPaymentMethod.toLowerCase().includes('transferencia');
+    if (isTransfer && !receiptImage) {
+      showToast('Debes adjuntar el comprobante de transferencia', 'error');
+      return;
+    }
+
+    try {
+      setIsProcessingPayment(true);
+      
+      // Process payment
+      await api.processTablePayment(
+        orderForPayment.id,
+        selectedPaymentMethod,
+        undefined,
+        receiptImage || undefined
+      );
+
+      // Archive the order after payment
+      try {
+        await api.archiveOrder(orderForPayment.id);
+      } catch (error: any) {
+        console.warn(`No se pudo archivar el pedido ${orderForPayment.id}:`, error);
+      }
+
+      showToast(`Pago procesado exitosamente. Total: $${orderForPayment.total.toFixed(2)}`, 'success');
+      setIsPaymentModalOpen(false);
+      setOrderForPayment(null);
+      setReceiptImage(null);
+      setReceiptImagePreview(null);
+      loadData();
+    } catch (error: any) {
+      showToast(error.message || 'Error al procesar el pago', 'error');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
   // Asegurar que orders siempre sea un array
   const safeOrders = Array.isArray(orders) ? orders : [];
 
@@ -817,6 +892,7 @@ export default function ActiveOrdersPage() {
                           setSelectedOrder(order);
                           setIsDetailsModalOpen(true);
                         }}
+                        onPay={() => openPaymentModal(order)}
                         currentTime={currentTime}
                       />
                     ))}
@@ -901,6 +977,7 @@ export default function ActiveOrdersPage() {
                               onStatusChange={handleStatusChange}
                               onAssign={() => openAssignModal(order)}
                               onCancel={() => setConfirmAction({ type: 'cancel', order })}
+                              onPay={() => openPaymentModal(order)}
                             />
                           </div>
                         </td>
@@ -1112,6 +1189,157 @@ export default function ActiveOrdersPage() {
         )}
       </Modal>
 
+      {/* Payment Modal */}
+      <Modal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setOrderForPayment(null);
+          setReceiptImage(null);
+          setReceiptImagePreview(null);
+        }}
+        title={orderForPayment ? `Cobrar Pedido #${orderForPayment.id}` : 'Cobrar Pedido'}
+      >
+        {orderForPayment && (
+          <div className="space-y-4">
+            {/* Order Summary */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium">Total a cobrar:</span>
+                <span className="text-2xl font-bold text-green-600">
+                  ${orderForPayment.total.toFixed(2)}
+                </span>
+              </div>
+              {orderForPayment.customerName && (
+                <p className="text-sm text-gray-600">Cliente: {orderForPayment.customerName}</p>
+              )}
+            </div>
+
+            {/* Payment Method Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Método de Pago *
+              </label>
+              <select
+                value={selectedPaymentMethod}
+                onChange={(e) => {
+                  setSelectedPaymentMethod(e.target.value);
+                  // Limpiar comprobante si se cambia a un método que no es transferencia
+                  if (!e.target.value.toLowerCase().includes('transfer')) {
+                    setReceiptImage(null);
+                    setReceiptImagePreview(null);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {paymentMethods.map((method) => (
+                  <option key={method.id} value={method.name}>
+                    {method.displayName || method.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Receipt Upload for Transfer */}
+            {(selectedPaymentMethod.toLowerCase().includes('transfer') || 
+              selectedPaymentMethod.toLowerCase().includes('transferencia')) && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Comprobante de Transferencia {receiptImage ? '(Adjuntado)' : '*'}
+                </label>
+                {receiptImagePreview ? (
+                  <div className="relative">
+                    <img
+                      src={receiptImagePreview}
+                      alt="Vista previa del comprobante"
+                      className="w-full max-h-48 object-contain border border-gray-300 rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReceiptImage(null);
+                        setReceiptImagePreview(null);
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                      title="Eliminar comprobante"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-500 transition-colors">
+                    <input
+                      type="file"
+                      id="receipt-upload-delivery"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const base64String = reader.result as string;
+                            setReceiptImage(base64String);
+                            setReceiptImagePreview(base64String);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor="receipt-upload-delivery"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <div className="p-3 bg-primary-100 rounded-full">
+                        <CreditCard size={24} className="text-primary-600" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Haz clic para adjuntar comprobante
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        JPG, PNG o GIF (máx. 5MB)
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setIsPaymentModalOpen(false);
+                  setOrderForPayment(null);
+                  setReceiptImage(null);
+                  setReceiptImagePreview(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleProcessPayment}
+                disabled={isProcessingPayment || !selectedPaymentMethod}
+                className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isProcessingPayment ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <DollarSign size={18} />
+                    Cobrar ${orderForPayment.total.toFixed(2)}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Cancel Confirmation */}
       <ConfirmModal
         isOpen={confirmAction?.type === 'cancel'}
@@ -1145,6 +1373,7 @@ function OrderCard({
   onAssign,
   onCancel,
   onViewDetails,
+  onPay,
   currentTime
 }: {
   order: Order;
@@ -1152,6 +1381,7 @@ function OrderCard({
   onAssign: () => void;
   onCancel: () => void;
   onViewDetails: () => void;
+  onPay?: () => void;
   currentTime: number;
 }) {
   const status = statusConfig[order.status];
@@ -1430,6 +1660,17 @@ function OrderCard({
                 <PackageCheck size={16} />
                 Entregado
               </button>
+              {/* Botón de cobrar solo para pedidos de delivery (sin tableId) */}
+              {!order.tableId && onPay && (
+                <button
+                  onClick={onPay}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+                  title="Cobrar pedido"
+                >
+                  <DollarSign size={16} />
+                  Cobrar
+                </button>
+              )}
               <button
                 onClick={onCancel}
                 className="px-3 py-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200"
@@ -1458,12 +1699,14 @@ function TableActions({
   order,
   onStatusChange,
   onAssign,
-  onCancel
+  onCancel,
+  onPay
 }: {
   order: Order;
   onStatusChange: (order: Order, status: OrderStatus) => void;
   onAssign: () => void;
   onCancel: () => void;
+  onPay?: () => void;
 }) {
   // Buscar tanto "transfer" (nombre interno) como "transferencia" (nombre para mostrar)
   const method = order.paymentMethod?.toLowerCase() || '';
@@ -1526,6 +1769,12 @@ function TableActions({
           <button onClick={() => onStatusChange(order, 'completed')} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="Marcar como entregado exitosamente">
             <PackageCheck size={16} />
           </button>
+          {/* Botón de cobrar solo para pedidos de delivery (sin tableId) */}
+          {!order.tableId && onPay && (
+            <button onClick={onPay} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200" title="Cobrar pedido">
+              <DollarSign size={16} />
+            </button>
+          )}
           <button onClick={onCancel} className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200" title="Reportar problema con la entrega - Cancelar pedido">
             <AlertTriangle size={16} />
           </button>

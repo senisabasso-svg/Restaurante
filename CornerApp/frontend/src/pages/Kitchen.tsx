@@ -33,8 +33,8 @@ const statusConfig: Record<OrderStatus, { label: string; color: string; bgColor:
   cancelled: { label: 'Cancelado', color: 'text-red-600', bgColor: 'bg-red-100', icon: XCircle },
 };
 
-// Estados de cocina (solo preparando)
-const KITCHEN_STATUSES: OrderStatus[] = ['preparing'];
+// Estados de cocina (preparando y pendientes que necesitan preparación)
+const KITCHEN_STATUSES: OrderStatus[] = ['preparing', 'pending'];
 
 // Función helper para verificar si un item es una bebida
 const isBebida = (item: { categoryName?: string | null }): boolean => {
@@ -192,7 +192,7 @@ export default function KitchenPage() {
       const ordersArray = Array.isArray(ordersResponse)
         ? ordersResponse
         : (ordersResponse as any)?.data || [];
-      // Filtrar solo los pedidos de cocina (solo preparing) que tienen items para preparar (no solo bebidas)
+      // Filtrar solo los pedidos de cocina (preparing y pending) que tienen items para preparar (no solo bebidas)
       const kitchenOrders = ordersArray.filter((o: Order) => 
         KITCHEN_STATUSES.includes(o.status) && hasItemsToPrepare(o)
       );
@@ -245,9 +245,11 @@ export default function KitchenPage() {
       showToast('Selecciona un repartidor', 'error');
       return;
     }
-    // Para pedidos de delivery desde cocina, marcar directamente como completado
-    // Esto carga el pedido automáticamente en la caja del repartidor
-    await handleStatusChange(selectedOrder, 'completed', selectedDeliveryPersonId);
+    
+    // Si el pedido está en "pending", cambiar a "preparing" al asignar el repartidor
+    // Si está en "preparing", marcar como "completed" (listo para enviar)
+    const newStatus = selectedOrder.status === 'pending' ? 'preparing' : 'completed';
+    await handleStatusChange(selectedOrder, newStatus, selectedDeliveryPersonId);
     setIsAssignModalOpen(false);
     setSelectedOrder(null);
     setSelectedDeliveryPersonId(null);
@@ -442,6 +444,19 @@ export default function KitchenPage() {
                               Delivery
                             </span>
                           )}
+                          {/* Mostrar repartidor asignado si existe */}
+                          {order.deliveryPersonId && order.deliveryPerson && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold flex items-center gap-1">
+                              <Truck size={12} />
+                              {order.deliveryPerson.name}
+                            </span>
+                          )}
+                          {order.deliveryPersonId && !order.deliveryPerson && (
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-bold flex items-center gap-1">
+                              <Truck size={12} />
+                              Repartidor #{order.deliveryPersonId}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -527,11 +542,20 @@ export default function KitchenPage() {
           setSelectedOrder(null);
           setSelectedDeliveryPersonId(null);
         }}
-        title="Asignar Repartidor"
+        title={selectedOrder?.deliveryPersonId ? "Cambiar Repartidor" : "Asignar Repartidor"}
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            Selecciona un repartidor para el pedido <strong>#{selectedOrder?.id}</strong>
+            {selectedOrder?.deliveryPersonId ? (
+              <>
+                El pedido <strong>#{selectedOrder?.id}</strong> ya tiene un repartidor asignado.
+                Selecciona otro repartidor para cambiarlo.
+              </>
+            ) : (
+              <>
+                Selecciona un repartidor para el pedido <strong>#{selectedOrder?.id}</strong>
+              </>
+            )}
           </p>
 
           <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -580,7 +604,7 @@ export default function KitchenPage() {
               className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Truck size={18} />
-              Listo para Enviar
+              {selectedOrder?.status === 'pending' ? 'Asignar y Preparar' : 'Listo para Enviar'}
             </button>
           </div>
         </div>
@@ -651,6 +675,19 @@ function KitchenOrderCard({
             ) : (
               <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-bold">
                 Delivery
+              </span>
+            )}
+            {/* Mostrar repartidor asignado si existe */}
+            {order.deliveryPersonId && order.deliveryPerson && (
+              <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold flex items-center gap-1">
+                <Truck size={12} />
+                {order.deliveryPerson.name}
+              </span>
+            )}
+            {order.deliveryPersonId && !order.deliveryPerson && (
+              <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-bold flex items-center gap-1">
+                <Truck size={12} />
+                Repartidor #{order.deliveryPersonId}
               </span>
             )}
           </div>
@@ -727,21 +764,53 @@ function KitchenOrderCard({
         <div className="flex gap-2">
           {order.status === 'pending' && (
             <>
-              <button
-                onClick={() => onStatusChange(order, 'preparing')}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-base font-bold"
-                title="Comenzar a preparar"
-              >
-                <Play size={20} />
-                Preparar
-              </button>
-              <button
-                onClick={onCancel}
-                className="px-4 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-                title="Cancelar pedido"
-              >
-                <XCircle size={20} />
-              </button>
+              {order.tableId != null ? (
+                // Pedido de salón: solo botón para comenzar a preparar
+                <>
+                  <button
+                    onClick={() => onStatusChange(order, 'preparing')}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-base font-bold"
+                    title="Comenzar a preparar"
+                  >
+                    <Play size={20} />
+                    Preparar
+                  </button>
+                  <button
+                    onClick={onCancel}
+                    className="px-4 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                    title="Cancelar pedido"
+                  >
+                    <XCircle size={20} />
+                  </button>
+                </>
+              ) : (
+                // Pedido de delivery: permitir asignar repartidor o comenzar a preparar
+                <>
+                  <button
+                    onClick={onAssign}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-base font-bold"
+                    title="Asignar repartidor"
+                  >
+                    <UserPlus size={20} />
+                    Asignar Repartidor
+                  </button>
+                  <button
+                    onClick={() => onStatusChange(order, 'preparing')}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-base font-bold"
+                    title="Comenzar a preparar"
+                  >
+                    <Play size={20} />
+                    Preparar
+                  </button>
+                  <button
+                    onClick={onCancel}
+                    className="px-4 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                    title="Cancelar pedido"
+                  >
+                    <XCircle size={20} />
+                  </button>
+                </>
+              )}
             </>
           )}
           {order.status === 'preparing' && (
@@ -757,15 +826,30 @@ function KitchenOrderCard({
                   Entregado a Mesa
                 </button>
               ) : (
-                // Pedido de delivery: abrir modal para asignar repartidor
-                <button
-                  onClick={onAssign}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-base font-bold"
-                  title="Listo - Asignar repartidor"
-                >
-                  <CheckCircle size={20} />
-                  ¡Listo!
-                </button>
+                // Pedido de delivery: mostrar si tiene repartidor o permitir asignar
+                <>
+                  {order.deliveryPersonId ? (
+                    // Ya tiene repartidor asignado
+                    <button
+                      onClick={() => onStatusChange(order, 'delivering', order.deliveryPersonId)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-base font-bold"
+                      title="Marcar como en camino"
+                    >
+                      <Truck size={20} />
+                      En Camino
+                    </button>
+                  ) : (
+                    // No tiene repartidor, permitir asignar
+                    <button
+                      onClick={onAssign}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-base font-bold"
+                      title="Listo - Asignar repartidor"
+                    >
+                      <CheckCircle size={20} />
+                      ¡Listo! (Asignar Repartidor)
+                    </button>
+                  )}
+                </>
               )}
               <button
                 onClick={onCancel}
@@ -798,12 +882,30 @@ function KitchenTableActions({
     <>
       {order.status === 'pending' && (
         <>
-          <button onClick={() => onStatusChange(order, 'preparing')} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="Comenzar a preparar">
-            <Play size={16} />
-          </button>
-          <button onClick={onCancel} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="Cancelar pedido">
-            <XCircle size={16} />
-          </button>
+          {order.tableId != null ? (
+            // Pedido de salón: solo botón para comenzar a preparar
+            <>
+              <button onClick={() => onStatusChange(order, 'preparing')} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="Comenzar a preparar">
+                <Play size={16} />
+              </button>
+              <button onClick={onCancel} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="Cancelar pedido">
+                <XCircle size={16} />
+              </button>
+            </>
+          ) : (
+            // Pedido de delivery: permitir asignar repartidor o comenzar a preparar
+            <>
+              <button onClick={onAssign} className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200" title="Asignar repartidor">
+                <UserPlus size={16} />
+              </button>
+              <button onClick={() => onStatusChange(order, 'preparing')} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="Comenzar a preparar">
+                <Play size={16} />
+              </button>
+              <button onClick={onCancel} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="Cancelar pedido">
+                <XCircle size={16} />
+              </button>
+            </>
+          )}
         </>
       )}
       {order.status === 'preparing' && (

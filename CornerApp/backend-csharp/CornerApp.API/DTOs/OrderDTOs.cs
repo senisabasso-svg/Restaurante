@@ -41,6 +41,16 @@ public class CreateOrderRequest
     /// </summary>
     public int? TableId { get; set; }
     
+    /// <summary>
+    /// Origen del pedido (ej: "clientesDelivery" para pedidos que requieren repartidor obligatorio)
+    /// </summary>
+    public string? Source { get; set; }
+    
+    /// <summary>
+    /// ID del repartidor asignado al pedido (opcional, puede asignarse al crear el pedido)
+    /// </summary>
+    public int? DeliveryPersonId { get; set; }
+    
     [Required(ErrorMessage = "El pedido debe contener al menos un item")]
     [MinLength(1, ErrorMessage = "El pedido debe contener al menos un item")]
     public List<OrderItemRequest> Items { get; set; } = new();

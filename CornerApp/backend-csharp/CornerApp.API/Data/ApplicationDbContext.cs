@@ -196,12 +196,16 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Order>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.OrderNumber).HasMaxLength(8);
             entity.Property(e => e.CustomerName).IsRequired().HasMaxLength(200);
             entity.Property(e => e.CustomerPhone).HasMaxLength(50);
             entity.Property(e => e.CustomerAddress).HasMaxLength(500);
             entity.Property(e => e.CustomerEmail).HasMaxLength(200);
             entity.Property(e => e.PaymentMethod).HasMaxLength(50);
             entity.Property(e => e.Status).HasMaxLength(50);
+            
+            // Índice único para OrderNumber (si no es null)
+            entity.HasIndex(e => e.OrderNumber).IsUnique().HasFilter("[OrderNumber] IS NOT NULL");
             entity.Property(e => e.Total).HasColumnType("decimal(18,2)");
             entity.Property(e => e.MercadoPagoPreferenceId).HasMaxLength(200);
             entity.Property(e => e.MercadoPagoPaymentId).HasMaxLength(200);

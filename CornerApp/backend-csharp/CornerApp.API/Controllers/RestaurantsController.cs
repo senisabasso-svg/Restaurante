@@ -31,9 +31,10 @@ public class RestaurantsController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene todos los restaurantes activos
+    /// Obtiene todos los restaurantes activos (público para registro de clientes)
     /// </summary>
     [HttpGet]
+    [AllowAnonymous] // Permitir acceso público para que los clientes puedan seleccionar restaurante al registrarse
     public async Task<ActionResult<IEnumerable<object>>> GetRestaurants()
     {
         var restaurants = await _context.Restaurants
@@ -60,9 +61,10 @@ public class RestaurantsController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene un restaurante por ID
+    /// Obtiene un restaurante por ID (público para que los clientes puedan ver su restaurante)
     /// </summary>
     [HttpGet("{id}")]
+    [AllowAnonymous] // Permitir acceso público para que los clientes puedan ver información de su restaurante
     public async Task<ActionResult<Restaurant>> GetRestaurant(int id)
     {
         var restaurant = await _context.Restaurants

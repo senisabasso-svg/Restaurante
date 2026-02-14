@@ -98,12 +98,12 @@ public interface IAdminDashboardService
     /// <summary>
     /// Crea un nuevo producto
     /// </summary>
-    Task<Product> CreateProductAsync(string name, string? description, decimal price, string? image, int categoryId, int displayOrder, bool isAvailable);
+    Task<Product> CreateProductAsync(string name, string? description, decimal price, string? image, int categoryId, int displayOrder, bool isAvailable, bool isRecommended = false);
 
     /// <summary>
     /// Actualiza un producto existente
     /// </summary>
-    Task<Product> UpdateProductAsync(int id, string? name, string? description, decimal? price, string? image, int? categoryId, int? displayOrder, bool? isAvailable);
+    Task<Product> UpdateProductAsync(int id, string? name, string? description, decimal? price, string? image, int? categoryId, int? displayOrder, bool? isAvailable, bool? isRecommended = null);
 
     /// <summary>
     /// Verifica si una categoría existe

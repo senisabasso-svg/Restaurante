@@ -25,7 +25,11 @@ export default function SettingsBusinessPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null);
-  const [formData, setFormData] = useState<UpdateBusinessInfoRequest>({});
+  const [formData, setFormData] = useState<UpdateBusinessInfoRequest>({
+    openingTime: '20:00',
+    closingTime: '00:00',
+    isOpen: true
+  });
 
   useEffect(() => {
     loadBusinessInfo();
@@ -120,13 +124,13 @@ export default function SettingsBusinessPage() {
           {/* Toggle abierto/cerrado */}
           <button
             onClick={handleToggleOpen}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${formData.isOpen
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${formData.isOpen ?? businessInfo?.isOpen ?? true
               ? 'bg-green-100 text-green-700 hover:bg-green-200'
               : 'bg-red-100 text-red-700 hover:bg-red-200'
               }`}
           >
             <Power size={18} />
-            {formData.isOpen ? 'Abierto' : 'Cerrado'}
+            {formData.isOpen ?? businessInfo?.isOpen ?? true ? 'Abierto' : 'Cerrado'}
           </button>
         </div>
       </div>

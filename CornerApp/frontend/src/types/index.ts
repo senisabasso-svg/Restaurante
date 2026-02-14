@@ -1,6 +1,7 @@
 // Order types
 export interface Order {
   id: number;
+  orderNumber?: string; // Número único de 8 dígitos para pedidos desde clientes
   customerName: string;
   customerAddress: string;
   customerPhone?: string;
@@ -53,8 +54,12 @@ export interface CreateOrderRequest {
   customerName: string;
   customerAddress: string;
   customerPhone?: string;
+  customerEmail?: string;
   paymentMethod: string;
   comments?: string;
+  receiptImage?: string;
+  source?: string; // 'clientesDelivery' para indicar que requiere repartidor
+  deliveryPersonId?: number; // ID del repartidor asignado (opcional)
   items: {
     id: number;
     name: string;
@@ -78,6 +83,7 @@ export interface Product {
   categoryId: number;
   category?: Category;
   isAvailable: boolean;
+  isRecommended?: boolean;
   displayOrder: number;
   createdAt: string;
   subProducts?: SubProduct[];
@@ -121,6 +127,7 @@ export interface CreateProductRequest {
   categoryId: number;
   displayOrder?: number;
   isAvailable?: boolean;
+  isRecommended?: boolean;
 }
 
 export interface UpdateProductRequest extends CreateProductRequest {

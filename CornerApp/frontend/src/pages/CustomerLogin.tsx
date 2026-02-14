@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useToast } from '../components/Toast/ToastContext';
-import { LogIn, Lock, User, Truck } from 'lucide-react';
+import { LogIn, Lock, Mail, ShoppingBag } from 'lucide-react';
 import Logo from '../components/Logo/Logo';
-import { api } from '../api/client';
 
-export default function DeliveryLoginPage() {
-  const [username, setUsername] = useState('');
+export default function CustomerLoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
@@ -15,7 +14,7 @@ export default function DeliveryLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username || !password) {
+    if (!email || !password) {
       showToast('Por favor completa todos los campos', 'error');
       return;
     }
@@ -23,12 +22,12 @@ export default function DeliveryLoginPage() {
     try {
       setLoading(true);
       
-      const response = await fetch('/api/deliveryperson/login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!response.ok) {
@@ -38,12 +37,12 @@ export default function DeliveryLoginPage() {
 
       const data = await response.json();
       
-      // Guardar token y datos del repartidor
-      localStorage.setItem('delivery_token', data.token);
-      localStorage.setItem('delivery_user', JSON.stringify(data.deliveryPerson));
+      // Guardar token y datos del cliente
+      localStorage.setItem('customer_token', data.token);
+      localStorage.setItem('customer_user', JSON.stringify(data.user));
       
       showToast('¡Bienvenido!', 'success');
-      navigate('/delivery/orders');
+      navigate('/clientes/pedidos');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error al iniciar sesión';
       showToast(errorMessage, 'error');
@@ -73,13 +72,13 @@ export default function DeliveryLoginPage() {
         
         {/* Contenido decorativo */}
         <div className="relative z-10 flex flex-col justify-center items-center p-12 text-white max-w-lg mx-auto w-full">
-          <h2 className="text-4xl font-bold mb-4 text-center">Repartidores</h2>
-          <p className="text-xl text-blue-200 text-center mb-12">Gestiona tus entregas desde un solo lugar</p>
+          <h2 className="text-4xl font-bold mb-4 text-center">Clientes</h2>
+          <p className="text-xl text-blue-200 text-center mb-12">Realiza tu pedido desde casa</p>
           
           {/* Icono decorativo */}
           <div className="flex flex-col items-center p-8 bg-white/10 rounded-xl backdrop-blur-sm">
-            <Truck size={64} className="mb-4" />
-            <span className="text-lg font-semibold">Panel de Repartidores</span>
+            <ShoppingBag size={64} className="mb-4" />
+            <span className="text-lg font-semibold">Panel de Clientes</span>
           </div>
         </div>
       </div>
@@ -100,28 +99,28 @@ export default function DeliveryLoginPage() {
           {/* Título */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center" style={{ color: 'var(--tw-ring-offset-color)' }}>Iniciar Sesión</h1>
-            <p className="text-center text-gray-600 text-sm">Acceso para repartidores</p>
+            <p className="text-center text-gray-600 text-sm">Acceso para clientes</p>
           </div>
 
           {/* Formulario */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Usuario */}
+            {/* Email */}
             <div>
-              <label htmlFor="username" className="block text-sm font-semibold text-white mb-2">
-                Usuario
+              <label htmlFor="email" className="block text-sm font-semibold text-white mb-2">
+                Email
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User size={20} className="text-gray-400 group-focus-within:text-primary-500 transition-colors" />
+                  <Mail size={20} className="text-gray-400 group-focus-within:text-primary-500 transition-colors" />
                 </div>
                 <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all outline-none text-gray-900 placeholder-gray-400"
-                  placeholder="Ingresa tu usuario"
-                  autoComplete="username"
+                  placeholder="Ingresa tu email"
+                  autoComplete="email"
                   disabled={loading}
                 />
               </div>
@@ -169,10 +168,23 @@ export default function DeliveryLoginPage() {
             </button>
           </form>
 
+          {/* Link a Registro */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-500" style={{ color: 'var(--tw-ring-offset-color)' }}>
+              ¿No tienes una cuenta?{' '}
+              <Link
+                to="/clientes/registro"
+                className="text-primary-500 hover:text-primary-600 font-semibold transition-colors"
+              >
+                Regístrate aquí
+              </Link>
+            </p>
+          </div>
+
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-center text-sm text-gray-500" style={{ color: 'var(--tw-ring-offset-color)' }}>
-              Sistema de repartidores RiDi Express
+              Sistema de pedidos en línea
             </p>
           </div>
         </div>

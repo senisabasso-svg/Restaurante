@@ -1,13 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout/Layout';
-import DeliveryLayout from './components/Layout/DeliveryLayout';
 import ProtectedRoute from './components/ProtectedRoute';
-import DeliveryProtectedRoute from './components/DeliveryProtectedRoute';
 import WaiterProtectedRoute from './components/WaiterProtectedRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import LoginPage from './pages/Login';
-import DeliveryLoginPage from './pages/DeliveryLogin';
 import WaiterLoginPage from './pages/WaiterLogin';
+import CustomerLoginPage from './pages/CustomerLogin';
+import CustomerRegisterPage from './pages/CustomerRegister';
+import CustomerOrderPage from './pages/CustomerOrderPage';
+import CustomerProtectedRoute from './components/CustomerProtectedRoute';
 import Dashboard from './pages/Dashboard';
 import OrdersPage from './pages/Orders';
 import ProductsPage from './pages/Products';
@@ -27,7 +28,6 @@ import PaymentVerificationPage from './pages/PaymentVerification';
 import TablesPage from './pages/Tables';
 import TablesViewPage from './pages/TablesView';
 import AdminUsersPage from './pages/AdminUsers';
-import DeliveryOrdersPage from './pages/DeliveryOrders';
 import DeliveryPersonsManagementPage from './pages/DeliveryPersonsManagement';
 import WaiterPage from './pages/WaiterPage';
 import SuperAdminPage from './pages/SuperAdmin';
@@ -36,8 +36,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/delivery/login" element={<DeliveryLoginPage />} />
       <Route path="/mozo/login" element={<WaiterLoginPage />} />
+      <Route path="/clientes/login" element={<CustomerLoginPage />} />
+      <Route path="/clientes/registro" element={<CustomerRegisterPage />} />
       <Route path="/" element={<Navigate to="/admin" replace />} />
       {/* Ruta para SuperAdmin - sin Layout, solo gestión de restaurantes */}
       <Route
@@ -73,24 +74,12 @@ export default function App() {
         <Route path="/admin/reports" element={<ReportsPage />} />
         {/* Settings sub-routes */}
         <Route path="/admin/settings" element={<Navigate to="/admin/settings/info" replace />} />
-        {/* <Route path="/admin/settings/business" element={<SettingsBusinessPage />} /> */} {/* Temporalmente deshabilitado */}
+        <Route path="/admin/settings/business" element={<SettingsBusinessPage />} />
         {/* <Route path="/admin/settings/delivery-zones" element={<SettingsDeliveryZonesPage />} /> */} {/* Temporalmente deshabilitado */}
         <Route path="/admin/settings/info" element={<SettingsInfoPage />} />
         <Route path="/admin/settings/payments" element={<SettingsPaymentsPage />} />
         <Route path="/admin/settings/email" element={<SettingsEmailPage />} />
         <Route path="/admin/settings/rewards" element={<SettingsRewardsPage />} />
-      </Route>
-      {/* Rutas protegidas para repartidores */}
-      <Route
-        element={
-          <ErrorBoundary>
-            <DeliveryProtectedRoute>
-              <DeliveryLayout />
-            </DeliveryProtectedRoute>
-          </ErrorBoundary>
-        }
-      >
-        <Route path="/delivery/orders" element={<ErrorBoundary><DeliveryOrdersPage /></ErrorBoundary>} />
       </Route>
       {/* Rutas protegidas para mozos */}
       <Route
@@ -100,6 +89,17 @@ export default function App() {
             <WaiterProtectedRoute>
               <TablesViewPage />
             </WaiterProtectedRoute>
+          </ErrorBoundary>
+        }
+      />
+      {/* Rutas protegidas para clientes */}
+      <Route
+        path="/clientes/pedidos"
+        element={
+          <ErrorBoundary>
+            <CustomerProtectedRoute>
+              <CustomerOrderPage />
+            </CustomerProtectedRoute>
           </ErrorBoundary>
         }
       />

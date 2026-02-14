@@ -411,7 +411,18 @@ public class OrdersController : ControllerBase
                 );
             }
 
-            // Obtener o crear cliente basado en teléfono/email
+            // Obtener RestaurantId del token si el cliente está autenticado
+            int? restaurantId = null;
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+                if (!string.IsNullOrEmpty(restaurantIdClaim) && int.TryParse(restaurantIdClaim, out int rid))
+                {
+                    restaurantId = rid;
+                }
+            }
+
+            // Si no se obtuvo del token, intentar obtenerlo del cliente si está autenticado
             int? customerId = null;
             if (User.Identity?.IsAuthenticated == true)
             {
@@ -423,6 +434,12 @@ public class OrdersController : ControllerBase
                     var customer = await _context.Customers.FindAsync(userId);
                     if (customer != null)
                     {
+                        // Usar RestaurantId del cliente si no se obtuvo del token
+                        if (!restaurantId.HasValue && customer.RestaurantId.HasValue)
+                        {
+                            restaurantId = customer.RestaurantId.Value;
+                        }
+
                         // Usar datos del cliente autenticado si no se proporcionan
                         if (string.IsNullOrEmpty(request.CustomerName))
                             request.CustomerName = customer.Name;
@@ -621,9 +638,85 @@ public class OrdersController : ControllerBase
                 paymentMethodName = paymentMethod.Name;
             }
 
+            // Validar deliveryPersonId si viene
+            if (request.DeliveryPersonId.HasValue)
+            {
+                var deliveryPerson = await _context.DeliveryPersons
+                    .FirstOrDefaultAsync(d => d.Id == request.DeliveryPersonId.Value && d.IsActive);
+                
+                if (deliveryPerson == null)
+                {
+                    return BadRequest(new { error = "El repartidor seleccionado no existe o no está activo" });
+                }
+                
+                // Validar que el repartidor pertenezca al mismo restaurante
+                if (restaurantId.HasValue && deliveryPerson.RestaurantId != restaurantId.Value)
+                {
+                    return BadRequest(new { error = "El repartidor seleccionado no pertenece a este restaurante" });
+                }
+                
+                // Validar que el repartidor tenga caja abierta
+                var openCashRegister = await _context.DeliveryCashRegisters
+                    .Where(c => c.DeliveryPersonId == request.DeliveryPersonId.Value 
+                        && c.RestaurantId == (restaurantId ?? deliveryPerson.RestaurantId)
+                        && c.IsOpen)
+                    .OrderByDescending(c => c.OpenedAt)
+                    .FirstOrDefaultAsync();
+                
+                if (openCashRegister == null)
+                {
+                    return BadRequest(new { error = "El repartidor seleccionado no tiene caja abierta" });
+                }
+            }
+
+            // Determinar el estado inicial del pedido
+            // Si viene de clientesDelivery:
+            // - Si tiene deliveryPersonId asignado, estado inicial es PREPARING
+            // - Si no tiene deliveryPersonId, estado inicial es PENDING (requiere asignación)
+            string initialStatus = OrderConstants.STATUS_PREPARING;
+            if (!string.IsNullOrWhiteSpace(request.Source) && 
+                request.Source.ToLower() == "clientesdelivery")
+            {
+                if (request.DeliveryPersonId.HasValue)
+                {
+                    initialStatus = OrderConstants.STATUS_PREPARING;
+                    _logger.LogInformation("Pedido creado desde clientesDelivery con repartidor asignado - Estado inicial: PREPARING");
+                }
+                else
+                {
+                    initialStatus = OrderConstants.STATUS_PENDING;
+                    _logger.LogInformation("Pedido creado desde clientesDelivery sin repartidor - Estado inicial: PENDING (requiere asignación de repartidor)");
+                }
+            }
+
+            // Si no se obtuvo RestaurantId del token o cliente, obtenerlo del primer producto
+            if (!restaurantId.HasValue && existingProducts.Any())
+            {
+                restaurantId = existingProducts.First().RestaurantId;
+                _logger.LogInformation("RestaurantId obtenido del primer producto: {RestaurantId}", restaurantId);
+            }
+
+            // Validar que tenemos un RestaurantId
+            if (!restaurantId.HasValue || restaurantId.Value <= 0)
+            {
+                _logger.LogError("No se pudo determinar RestaurantId para el pedido");
+                return BadRequest(new { error = "No se pudo determinar el restaurante. Por favor, inicia sesión nuevamente." });
+            }
+
+            // Generar número de pedido único de 8 dígitos para pedidos desde clientes
+            string? orderNumber = null;
+            if (!string.IsNullOrWhiteSpace(request.Source) && 
+                request.Source.ToLower() == "clientesdelivery")
+            {
+                orderNumber = await GenerateUniqueOrderNumberAsync(restaurantId.Value);
+                _logger.LogInformation("Número de pedido generado para cliente: {OrderNumber}", orderNumber);
+            }
+
             // Crear orden
             var order = new Order
             {
+                OrderNumber = orderNumber, // Número único de 8 dígitos para pedidos desde clientes
+                RestaurantId = restaurantId.Value, // Asignar RestaurantId
                 CustomerId = customerId,
                 CustomerName = request.CustomerName,
                 CustomerPhone = request.CustomerPhone ?? string.Empty,
@@ -633,8 +726,9 @@ public class OrdersController : ControllerBase
                 CustomerLongitude = customerLongitude, // Guardar coordenadas geocodificadas
                 Total = total,
                 PaymentMethod = paymentMethodName,
-                Status = OrderConstants.STATUS_PREPARING, // Ir directamente a cocina
+                Status = initialStatus, // PENDING si viene de clientesDelivery sin repartidor, PREPARING en otros casos
                 EstimatedDeliveryMinutes = estimatedMinutes,
+                DeliveryPersonId = request.DeliveryPersonId, // Asignar repartidor si viene
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 // Validar comprobante si existe
@@ -899,10 +993,12 @@ public class OrdersController : ControllerBase
             return NotFound(new { error = "Pedido no encontrado", orderId = id });
         }
 
-        // Si el usuario está autenticado, verificar que el pedido le pertenece
+        // Si el usuario está autenticado, verificar que el pedido le pertenece y que es del mismo restaurante
         if (User.Identity?.IsAuthenticated == true)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+            
             if (int.TryParse(userIdClaim, out int userId))
             {
                 // Si el pedido tiene un CustomerId y no coincide con el usuario autenticado, rechazar
@@ -915,6 +1011,22 @@ public class OrdersController : ControllerBase
                         order.CustomerId
                     );
                     return StatusCode(403, new { error = "No tienes permiso para ver este pedido" });
+                }
+
+                // Validar que el pedido pertenece al mismo restaurante del cliente
+                if (!string.IsNullOrEmpty(restaurantIdClaim) && int.TryParse(restaurantIdClaim, out int customerRestaurantId))
+                {
+                    if (order.RestaurantId != customerRestaurantId)
+                    {
+                        _logger.LogWarning(
+                            "Intento de acceso no autorizado: Cliente {UserId} del restaurante {CustomerRestaurantId} intentó ver pedido {OrderId} del restaurante {OrderRestaurantId}",
+                            userId,
+                            customerRestaurantId,
+                            id,
+                            order.RestaurantId
+                        );
+                        return StatusCode(403, new { error = "No tienes permiso para ver este pedido" });
+                    }
                 }
             }
         }
@@ -978,11 +1090,22 @@ public class OrdersController : ControllerBase
             return Unauthorized(new { error = "Usuario no autenticado" });
         }
 
+        // Obtener RestaurantId del token del cliente
+        var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+        if (string.IsNullOrEmpty(restaurantIdClaim) || !int.TryParse(restaurantIdClaim, out int restaurantId))
+        {
+            _logger.LogWarning("Cliente {UserId} intentó obtener pedidos sin RestaurantId en el token", userId);
+            return Unauthorized(new { error = "RestaurantId no encontrado en el token. Por favor, inicia sesión nuevamente." });
+        }
+
         var (normalizedPage, normalizedPageSize) = PaginationHelper.NormalizePagination(page, pageSize);
 
+        // Filtrar por CustomerId Y RestaurantId para asegurar que no se mezclen datos entre restaurantes
         var query = _context.Orders
             .Include(o => o.Items)
-            .Where(o => o.CustomerId == userId && !o.IsArchived)
+            .Where(o => o.CustomerId == userId && 
+                       o.RestaurantId == restaurantId && 
+                       !o.IsArchived)
             .OrderByDescending(o => o.CreatedAt);
 
         var pagedResponse = await PaginationHelper.ToPagedResponseAsync(query, normalizedPage, normalizedPageSize);
@@ -1197,13 +1320,88 @@ public class OrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Obtiene todos los métodos de pago activos
+    /// Obtiene los repartidores con caja abierta del restaurante del usuario autenticado
+    /// </summary>
+    [HttpGet("available-delivery-persons")]
+    public async Task<ActionResult> GetAvailableDeliveryPersons()
+    {
+        try
+        {
+            // Obtener RestaurantId del token
+            int? restaurantId = null;
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+                if (!string.IsNullOrEmpty(restaurantIdClaim) && int.TryParse(restaurantIdClaim, out int rid))
+                {
+                    restaurantId = rid;
+                }
+            }
+
+            if (!restaurantId.HasValue)
+            {
+                return BadRequest(new { error = "No se pudo determinar el restaurante. Por favor, inicia sesión nuevamente." });
+            }
+
+            // Obtener repartidores activos del restaurante con caja abierta
+            var availableDeliveryPersons = await _context.DeliveryCashRegisters
+                .Include(dcr => dcr.DeliveryPerson)
+                .Where(c => c.RestaurantId == restaurantId.Value 
+                    && c.IsOpen 
+                    && c.DeliveryPerson != null 
+                    && c.DeliveryPerson.IsActive)
+                .OrderByDescending(c => c.OpenedAt)
+                .Select(c => new
+                {
+                    id = c.DeliveryPerson!.Id,
+                    name = c.DeliveryPerson!.Name,
+                    phone = c.DeliveryPerson!.Phone,
+                    email = c.DeliveryPerson!.Email,
+                    username = c.DeliveryPerson!.Username,
+                    cashRegisterId = c.Id,
+                    openedAt = c.OpenedAt
+                })
+                .Distinct()
+                .ToListAsync();
+
+            return Ok(availableDeliveryPersons);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener repartidores disponibles");
+            return StatusCode(500, new { error = "Error al obtener repartidores disponibles" });
+        }
+    }
+
+    /// <summary>
+    /// Obtiene todos los métodos de pago activos del restaurante del usuario autenticado
     /// </summary>
     [HttpGet("payment-methods")]
     public async Task<ActionResult> GetPaymentMethods()
     {
-        var paymentMethods = await _context.PaymentMethods
-            .Where(pm => pm.IsActive)
+        // Obtener RestaurantId del token si el usuario está autenticado
+        int? restaurantId = null;
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var restaurantIdClaim = User.FindFirst("RestaurantId")?.Value;
+            if (!string.IsNullOrEmpty(restaurantIdClaim) && int.TryParse(restaurantIdClaim, out int rid))
+            {
+                restaurantId = rid;
+            }
+        }
+
+        // Si el usuario está autenticado, filtrar por RestaurantId
+        // Si no está autenticado, devolver todos los métodos activos (para pedidos sin cuenta)
+        var query = _context.PaymentMethods.Where(pm => pm.IsActive);
+        
+        // Nota: Los métodos de pago actualmente no tienen RestaurantId en el modelo
+        // Si en el futuro se agrega multi-tenant a PaymentMethods, descomentar esto:
+        // if (restaurantId.HasValue)
+        // {
+        //     query = query.Where(pm => pm.RestaurantId == restaurantId.Value);
+        // }
+
+        var paymentMethods = await query
             .OrderBy(pm => pm.DisplayOrder)
             .Select(pm => new
             {
@@ -1534,6 +1732,55 @@ public class OrdersController : ControllerBase
             _logger.LogError(ex, "Error al eliminar permanentemente el pedido {OrderId}", id);
             return StatusCode(500, new { error = "Error al eliminar el pedido", details = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Genera un número único de 8 dígitos para pedidos desde clientes
+    /// </summary>
+    private async Task<string> GenerateUniqueOrderNumberAsync(int restaurantId)
+    {
+        var random = new Random();
+        int maxAttempts = 100; // Límite de intentos para evitar loops infinitos
+        int attempts = 0;
+
+        while (attempts < maxAttempts)
+        {
+            // Generar número aleatorio de 8 dígitos (10000000 a 99999999)
+            int number = random.Next(10000000, 100000000);
+            string orderNumber = number.ToString();
+
+            // Verificar que no exista en la base de datos para este restaurante
+            var exists = await _context.Orders
+                .AnyAsync(o => o.OrderNumber == orderNumber && o.RestaurantId == restaurantId);
+
+            if (!exists)
+            {
+                return orderNumber;
+            }
+
+            attempts++;
+        }
+
+        // Si después de 100 intentos no encontramos uno único, usar timestamp + random
+        // Formato: últimos 6 dígitos del timestamp + 2 dígitos aleatorios
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var timestampDigits = timestamp.ToString().Substring(Math.Max(0, timestamp.ToString().Length - 6));
+        var randomSuffix = random.Next(10, 100).ToString();
+        var fallbackNumber = timestampDigits.PadRight(6, '0').Substring(0, 6) + randomSuffix;
+
+        // Verificar que el fallback también sea único
+        var fallbackExists = await _context.Orders
+            .AnyAsync(o => o.OrderNumber == fallbackNumber && o.RestaurantId == restaurantId);
+
+        if (!fallbackExists)
+        {
+            return fallbackNumber;
+        }
+
+        // Último recurso: usar timestamp completo truncado a 8 dígitos
+        var finalNumber = timestamp.ToString().Substring(Math.Max(0, timestamp.ToString().Length - 8)).PadLeft(8, '0');
+        _logger.LogWarning("Usando número de pedido basado en timestamp como último recurso: {OrderNumber}", finalNumber);
+        return finalNumber;
     }
 }
 

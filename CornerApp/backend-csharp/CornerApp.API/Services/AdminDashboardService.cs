@@ -474,7 +474,7 @@ public class AdminDashboardService : IAdminDashboardService
     /// <summary>
     /// Crea un nuevo producto
     /// </summary>
-    public async Task<Product> CreateProductAsync(string name, string? description, decimal price, string? image, int categoryId, int displayOrder, bool isAvailable)
+    public async Task<Product> CreateProductAsync(string name, string? description, decimal price, string? image, int categoryId, int displayOrder, bool isAvailable, bool isRecommended = false)
     {
         // Validar que la categoría existe
         if (!await CategoryExistsAsync(categoryId))
@@ -517,6 +517,7 @@ public class AdminDashboardService : IAdminDashboardService
             CategoryId = categoryId,
             DisplayOrder = displayOrder != 0 ? displayOrder : maxDisplayOrder + 1,
             IsAvailable = isAvailable,
+            IsRecommended = isRecommended,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -540,7 +541,7 @@ public class AdminDashboardService : IAdminDashboardService
     /// <summary>
     /// Actualiza un producto existente
     /// </summary>
-    public async Task<Product> UpdateProductAsync(int id, string? name, string? description, decimal? price, string? image, int? categoryId, int? displayOrder, bool? isAvailable)
+    public async Task<Product> UpdateProductAsync(int id, string? name, string? description, decimal? price, string? image, int? categoryId, int? displayOrder, bool? isAvailable, bool? isRecommended = null)
     {
         var product = await _context.Products.FindAsync(id);
         if (product == null)
@@ -584,6 +585,11 @@ public class AdminDashboardService : IAdminDashboardService
         if (isAvailable.HasValue)
         {
             product.IsAvailable = isAvailable.Value;
+        }
+
+        if (isRecommended.HasValue)
+        {
+            product.IsRecommended = isRecommended.Value;
         }
 
         if (displayOrder.HasValue)

@@ -187,7 +187,8 @@ public class AdminProductsController : ControllerBase
                 request.Image,
                 request.CategoryId,
                 request.DisplayOrder,
-                request.IsAvailable);
+                request.IsAvailable,
+                request.IsRecommended);
 
             // El RestaurantId ya está asignado en el servicio desde la categoría
 
@@ -201,6 +202,7 @@ public class AdminProductsController : ControllerBase
                 categoryId = product.CategoryId,
                 category = product.Category?.Name ?? "",
                 isAvailable = product.IsAvailable,
+                isRecommended = product.IsRecommended,
                 displayOrder = product.DisplayOrder
             });
         }
@@ -258,7 +260,8 @@ public class AdminProductsController : ControllerBase
                 request.Image,
                 request.CategoryId,
                 request.DisplayOrder,
-                request.IsAvailable);
+                request.IsAvailable,
+                request.IsRecommended);
 
             return Ok(new
             {
@@ -270,6 +273,7 @@ public class AdminProductsController : ControllerBase
                 categoryId = product.CategoryId,
                 category = product.Category?.Name ?? "",
                 isAvailable = product.IsAvailable,
+                isRecommended = product.IsRecommended,
                 displayOrder = product.DisplayOrder
             });
         }

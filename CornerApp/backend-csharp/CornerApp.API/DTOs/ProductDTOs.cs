@@ -12,6 +12,7 @@ public class CreateProductRequest
     public int CategoryId { get; set; }
     public int DisplayOrder { get; set; } = 0;
     public bool IsAvailable { get; set; } = true;
+    public bool IsRecommended { get; set; } = false;
 }
 
 /// <summary>
@@ -26,6 +27,7 @@ public class UpdateProductRequest
     public int? CategoryId { get; set; }
     public int? DisplayOrder { get; set; }
     public bool? IsAvailable { get; set; }
+    public bool? IsRecommended { get; set; }
 }
 
 /// <summary>

@@ -14,6 +14,7 @@ public class Product
     public string Image { get; set; } = string.Empty;
     public int DisplayOrder { get; set; } = 0; // Orden de visualización
     public bool IsAvailable { get; set; } = true;
+    public bool IsRecommended { get; set; } = false; // Producto recomendado
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
     

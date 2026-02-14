@@ -13,7 +13,7 @@ COPY package*.json ./
 # Instalar dependencias
 RUN npm install
 
-# Copiar código fuente
+# Copiar código fuente (incluyendo nginx.conf)
 COPY . .
 
 # Build de la aplicación
@@ -28,8 +28,8 @@ RUN apk add --no-cache wget
 # Copiar archivos build
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copiar configuración de nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copiar configuración de nginx desde la etapa de build
+COPY --from=build /app/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Exponer puerto
 EXPOSE 80

@@ -22,8 +22,8 @@ class ApiClient {
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {}, skipAuth = false } = options;
 
-    // Obtener token del localStorage (admin, mozo o repartidor) solo si no se omite la autenticación
-    const token = skipAuth ? null : (localStorage.getItem('admin_token') || localStorage.getItem('waiter_token') || localStorage.getItem('delivery_token'));
+    // Obtener token del localStorage (admin, mozo o cliente) solo si no se omite la autenticación
+    const token = skipAuth ? null : (localStorage.getItem('admin_token') || localStorage.getItem('waiter_token') || localStorage.getItem('customer_token'));
 
     const config: RequestInit = {
       method,
@@ -43,7 +43,6 @@ class ApiClient {
     if (!response.ok) {
       // Si es 401 (No autorizado), limpiar tokens y redirigir al login apropiado
       if (response.status === 401) {
-        const isDeliveryRoute = endpoint.includes('/deliveryperson/') || endpoint.includes('/delivery/');
         const isWaiterRoute = endpoint.includes('/waiter/') || window.location.pathname.includes('/mozo');
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
@@ -51,9 +50,7 @@ class ApiClient {
         localStorage.removeItem('waiter_user');
         localStorage.removeItem('delivery_token');
         localStorage.removeItem('delivery_user');
-        if (isDeliveryRoute) {
-          window.location.href = '/delivery/login';
-        } else if (isWaiterRoute) {
+        if (isWaiterRoute) {
           window.location.href = '/mozo/login';
         } else {
           window.location.href = '/login';
@@ -601,13 +598,37 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('/admin/api/products/upload-image', {
+    // Obtener token del localStorage (admin, mozo o cliente)
+    const token = localStorage.getItem('admin_token') || localStorage.getItem('waiter_token') || localStorage.getItem('customer_token');
+
+    const response = await fetch(`${this.baseUrl}/admin/api/products/upload-image`, {
       method: 'POST',
+      headers: {
+        // No establecer Content-Type para FormData, el navegador lo hace automáticamente con el boundary correcto
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
       body: formData,
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+        localStorage.removeItem('waiter_token');
+        localStorage.removeItem('waiter_user');
+        window.location.href = '/login';
+        throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+      }
+      
+      let errorData: any = {};
+      try {
+        const text = await response.text();
+        if (text) {
+          errorData = JSON.parse(text);
+        }
+      } catch (e) {
+        errorData = { error: response.statusText };
+      }
       throw new Error(errorData.error || 'Error al subir imagen');
     }
 
@@ -956,35 +977,6 @@ class ApiClient {
     });
   }
 
-  // Delivery Cash Register (Caja de Repartidor)
-  async getDeliveryCashRegisterStatus() {
-    return this.request<{ isOpen: boolean; cashRegister: any }>('/api/delivery-cash-register/status');
-  }
-
-  async openDeliveryCashRegister() {
-    return this.request<any>('/api/delivery-cash-register/open', {
-      method: 'POST',
-    });
-  }
-
-  async closeDeliveryCashRegister(notes?: string) {
-    return this.request<any>('/api/delivery-cash-register/close', {
-      method: 'POST',
-      body: { notes },
-    });
-  }
-
-  async getDeliveryOrders() {
-    return this.request<Order[]>('/api/delivery-cash-register/orders');
-  }
-
-  // Delivery Cash Register: Actualizar estado de pedido con nota
-  async updateDeliveryCashRegisterOrderStatus(orderId: number, status: string, note?: string) {
-    return this.request<Order>(`/api/delivery-cash-register/orders/${orderId}/status`, {
-      method: 'PATCH',
-      body: { status, note },
-    });
-  }
 
   async getCashRegisterHistory(page: number = 1, pageSize: number = 20) {
     return this.request<{ cashRegisters: any[]; total: number; page: number; pageSize: number; totalPages: number }>(
@@ -1000,42 +992,6 @@ class ApiClient {
     return this.request<any>(`/admin/api/cash-register/${cashRegisterId}/movements`);
   }
 
-  // Delivery Person (Repartidor) endpoints
-  async deliveryPersonLogin(username: string, password: string) {
-    return this.request<{ token: string; deliveryPerson: any }>('/api/deliveryperson/login', {
-      method: 'POST',
-      body: { username, password },
-      skipAuth: true,
-    });
-  }
-
-  async getDeliveryPersonOrders() {
-    return this.request<Order[]>('/api/deliveryperson/orders');
-  }
-
-  async getDeliveryPersonOrder(orderId: number) {
-    return this.request<Order>(`/api/deliveryperson/orders/${orderId}`);
-  }
-
-  async updateDeliveryPersonLocation(orderId: number, latitude: number, longitude: number) {
-    return this.request<any>(`/api/deliveryperson/orders/${orderId}/location`, {
-      method: 'PATCH',
-      body: { latitude, longitude },
-    });
-  }
-
-  async updateDeliveryOrderStatus(orderId: number, status: string) {
-    return this.request<Order>(`/api/deliveryperson/orders/${orderId}/status`, {
-      method: 'PATCH',
-      body: { status },
-    });
-  }
-
-  async verifyDeliveryPersonToken() {
-    return this.request<{ deliveryPerson: any }>('/api/deliveryperson/verify', {
-      method: 'POST',
-    });
-  }
 
   // Admin Users
   async getAdminUsers(search?: string) {

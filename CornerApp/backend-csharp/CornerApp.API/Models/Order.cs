@@ -6,6 +6,9 @@ public class Order
 {
     public int Id { get; set; }
     
+    // Número de pedido único de 8 dígitos (para mostrar al cliente)
+    public string? OrderNumber { get; set; }
+    
     // Multi-tenant: cada pedido pertenece a un restaurante
     public int RestaurantId { get; set; }
     public Restaurant? Restaurant { get; set; }

@@ -39,7 +39,11 @@ export default function ProductsPage() {
     categoryId: 0,
     displayOrder: 0,
     isAvailable: true,
+    isRecommended: false,
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   
   // SubProduct form state
@@ -108,7 +112,10 @@ export default function ProductsPage() {
       categoryId: freshCategories[0]?.id || 0,
       displayOrder: 0,
       isAvailable: true,
+      isRecommended: false,
     });
+    setImageFile(null);
+    setImagePreview(null);
     setIsFormModalOpen(true);
   };
 
@@ -122,7 +129,10 @@ export default function ProductsPage() {
       categoryId: product.categoryId,
       displayOrder: product.displayOrder,
       isAvailable: product.isAvailable,
+      isRecommended: product.isRecommended || false,
     });
+    setImageFile(null);
+    setImagePreview(product.image || null);
     setIsFormModalOpen(true);
   };
 
@@ -144,11 +154,31 @@ export default function ProductsPage() {
 
     try {
       setFormLoading(true);
+      
+      // Si hay una imagen nueva para subir, subirla primero
+      let imageUrl = formData.image;
+      if (imageFile) {
+        setIsUploadingImage(true);
+        try {
+          const uploadResult = await api.uploadProductImage(imageFile);
+          imageUrl = uploadResult.url;
+          showToast('Imagen subida exitosamente', 'success');
+        } catch (uploadError: any) {
+          showToast(uploadError.message || 'Error al subir imagen', 'error');
+          setIsUploadingImage(false);
+          return;
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
+      
+      const productData = { ...formData, image: imageUrl };
+      
       if (editingProduct) {
-        await api.updateProduct(editingProduct.id, { ...formData, id: editingProduct.id });
+        await api.updateProduct(editingProduct.id, { ...productData, id: editingProduct.id });
         showToast('Producto actualizado correctamente', 'success');
       } else {
-        const newProduct = await api.createProduct(formData);
+        const newProduct = await api.createProduct(productData);
         showToast('Producto creado correctamente', 'success');
         // Resetear filtros para mostrar el nuevo producto
         setSearchTerm('');
@@ -156,6 +186,8 @@ export default function ProductsPage() {
         setCurrentPage(1);
       }
       setIsFormModalOpen(false);
+      setImageFile(null);
+      setImagePreview(null);
       // Recargar datos después de un pequeño delay para asegurar que el backend haya guardado
       await new Promise(resolve => setTimeout(resolve, 300));
       await loadData();
@@ -618,6 +650,106 @@ export default function ProductsPage() {
                 <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Image Upload */}
+          <div>
+            <label htmlFor="productImage" className="block text-sm font-medium text-gray-700 mb-1">Imagen del Producto</label>
+            {imagePreview ? (
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="Vista previa"
+                  className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreview(null);
+                    setFormData(prev => ({ ...prev, image: '' }));
+                  }}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                  title="Eliminar imagen"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-500 transition-colors">
+                <input
+                  type="file"
+                  id="productImage"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setImageFile(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setImagePreview(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="productImage"
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  <Package size={32} className="text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700">
+                    Haz clic para subir imagen
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    JPG, PNG o GIF (máx. 5MB)
+                  </span>
+                </label>
+              </div>
+            )}
+            {formData.image && !imagePreview && (
+              <div className="mt-2">
+                <p className="text-xs text-gray-500">URL actual: {formData.image}</p>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, image: '' }))}
+                  className="text-xs text-red-600 hover:text-red-800 mt-1"
+                >
+                  Limpiar URL
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* URL alternativa para imagen */}
+          {!imageFile && !imagePreview && (
+            <div>
+              <label htmlFor="productImageUrl" className="block text-sm font-medium text-gray-700 mb-1">URL de Imagen (alternativa)</label>
+              <input
+                type="text"
+                id="productImageUrl"
+                name="productImageUrl"
+                value={formData.image}
+                onChange={(e) => setFormData(prev => ({ ...prev, image: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="https://ejemplo.com/imagen.jpg"
+              />
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="productIsRecommended" className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                id="productIsRecommended"
+                name="productIsRecommended"
+                checked={formData.isRecommended || false}
+                onChange={(e) => setFormData(prev => ({ ...prev, isRecommended: e.target.checked }))}
+                className="w-4 h-4 accent-yellow-500"
+              />
+              <span className="text-sm font-medium text-gray-700">⭐ Producto Recomendado</span>
+            </label>
           </div>
 
           <div>
